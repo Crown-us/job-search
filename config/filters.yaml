@@ -1,0 +1,62 @@
+# Hard filters. Cheap, deterministic, runs before any scoring.
+# Tune this when a run gets noisy — it is the difference between 900 rows and 40.
+
+# Drop a posting when the title contains any of these. Built for someone at
+# junior/associate level: seniority words out, non-technical roles out.
+exclude_title_keywords:
+  - senior
+  - sr.
+  - sr 
+  - lead
+  - principal
+  - staff
+  - head of
+  - director
+  - vp
+  - vice president
+  - manager
+  - architect
+  - chief
+  - "10+ years"
+  - "8+ years"
+  - "7+ years"
+  - "6+ years"
+  - "5+ years"
+  - sales
+  - account executive
+  - recruiter
+  - legal
+  - counsel
+  - paralegal
+  - payroll
+
+exclude_company_keywords: []
+
+# Empty means no keyword gate — scoring decides. Fill it once profile.yaml is set,
+# e.g. [python, sql, support, it, data, automation, prompt]
+must_have_any: []
+
+# A posting passes when it is remote, has no location, or its location matches.
+location_allow:
+  - indonesia
+  - jakarta
+  - malang
+  - surabaya
+  - bandung
+  - yogyakarta
+  - jogja
+  - semarang
+  - bali
+  - denpasar
+  - remote
+  - anywhere
+  - worldwide
+  - global
+  - apac
+  - asia
+  - sea
+
+remote_only: false
+
+# Postings with an unparseable or missing date always pass.
+max_age_days: 60

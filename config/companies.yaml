@@ -1,0 +1,42 @@
+# Company boards to poll. Tokens are the slug in the board URL:
+#   boards.greenhouse.io/<token>   jobs.lever.co/<token>
+#   jobs.ashbyhq.com/<token>       apply.workable.com/<token>
+# Verified alive with `python -m jobhunter probe` on 2026-10-19.
+
+greenhouse:
+  - stripe          # 731
+  - anthropic       # 655
+  - datadog         # 433
+  - cloudflare      # 433
+  - mongodb         # 401
+  - brex            # 260
+  - gitlab          # 232
+  - coinbase        # 226
+  - flexport        # 210
+  - airbnb          # 173
+  - reddit          # 145
+  - figma           # 139
+  - twilio          # 133
+  - instacart       # 126
+  - vercel          # 93
+  - tailscale       # 62
+  - discord         # 47
+  - xendit          # 25  (Indonesia)
+  - dropbox         # 18
+  - netlify         # 5
+
+ashby:
+  - ramp            # 167
+  - elevenlabs      # 156
+  - vanta           # 85
+  - replit          # 65
+  - modal           # 43
+  - linear          # 29
+  - runway          # 3
+
+# Lever boards were all dead; keep the key so re-probing later is easy.
+lever: []
+
+# Workable returned empty for every candidate; Indonesian boards (Glints,
+# JobStreet, Kalibrr, Dealls) need their own adapters, not this API.
+workable: []

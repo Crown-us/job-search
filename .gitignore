@@ -1,0 +1,9 @@
+data/
+.env
+__pycache__/
+*.py[cod]
+.venv/
+*.db
+*.db-journal
+.vscode/
+.dsh-write-test
