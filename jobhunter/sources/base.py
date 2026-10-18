@@ -22,6 +22,8 @@ SOURCE_PRIORITY = {
     "lever": 0,
     "ashby": 0,
     "workable": 0,
+    "jobstreet": 0,
+    "kalibrr": 0,
     "remoteok": 1,
     "hackernews": 2,
 }

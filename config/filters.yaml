@@ -41,13 +41,28 @@ location_allow:
   - indonesia
   - jakarta
   - malang
+  - kediri
+  - jombang
   - surabaya
+  - sidoarjo
+  - gresik
+  - mojokerto
   - bandung
   - yogyakarta
   - jogja
+  - sleman
   - semarang
   - bali
   - denpasar
+  - tangerang
+  - bekasi
+  - depok
+  - bogor
+  - medan
+  - makassar
+  - palembang
+  - batam
+  - jawa
   - remote
   - anywhere
   - worldwide

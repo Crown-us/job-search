@@ -71,6 +71,8 @@ def upsert(conn: sqlite3.Connection, rows: list[dict]) -> tuple[int, int]:
     VALUES ({','.join('?' * len(FIELDS))}, ?, 'new')
     ON CONFLICT(id) DO UPDATE SET
         last_seen   = excluded.last_seen,
+        location    = excluded.location,
+        remote      = excluded.remote,
         salary      = CASE WHEN jobs.salary = '' THEN excluded.salary ELSE jobs.salary END,
         description = CASE WHEN jobs.description = '' THEN excluded.description ELSE jobs.description END,
         posted_at   = CASE WHEN jobs.posted_at = '' THEN excluded.posted_at ELSE jobs.posted_at END

@@ -1,0 +1,29 @@
+# Query-based sources: searched by keyword instead of by company board.
+# Keep keywords narrow — every keyword is a request, and broad ones ("admin")
+# flood the database with irrelevant rows.
+
+jobstreet:
+  keywords:
+    - fullstack developer
+    - laravel developer
+    - php developer
+    - react developer
+    - frontend developer
+    - backend developer
+    - it support
+    - junior programmer
+  pages: 2
+
+# Kalibrr searches on `text` (not q/search/q). Without it the endpoint returns
+# one company's feed, which is useless.
+kalibrr:
+  keywords:
+    - fullstack developer
+    - laravel
+    - react developer
+    - php developer
+    - it support
+    - junior developer
+    - frontend developer
+    - backend developer
+  pages: 1

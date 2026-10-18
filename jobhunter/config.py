@@ -34,6 +34,10 @@ def filters() -> dict:
     return load_yaml("filters.yaml")
 
 
+def searches() -> dict:
+    return load_yaml("searches.yaml")
+
+
 def profile() -> dict:
     return load_yaml("profile.yaml")
 

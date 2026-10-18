@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import config, db
 from .model import Job
-from .sources import ADAPTERS, BOARD_SOURCES, FEED_SOURCES
+from .sources import ADAPTERS, BOARD_SOURCES, FEED_SOURCES, QUERY_SOURCES
 from .sources.base import SOURCE_PRIORITY
 
 
@@ -87,9 +87,10 @@ def run_discover(
     dry_run: bool = False,
 ) -> dict:
     cfg = config.companies()
+    searches = config.searches()
     flt = config.filters()
 
-    wanted = sources or [name for name in ADAPTERS if cfg.get(name)]
+    wanted = sources or [name for name in ADAPTERS if cfg.get(name) or searches.get(name)]
     fetched = 0
     kept: list[Job] = []
     by_source: dict[str, int] = {}
@@ -100,17 +101,28 @@ def run_discover(
         if adapter is None:
             errors.append(f"{name}: unknown source")
             continue
-        tokens = cfg.get(name) or []
-        targets = [t for t in tokens] if name in BOARD_SOURCES else [""]
-        if name not in BOARD_SOURCES and name not in FEED_SOURCES:
-            continue
 
         count = 0
-        for token in targets:
+        if name in QUERY_SOURCES:
+            spec = searches.get(name) or {}
+            keywords = spec.get("keywords") or []
+            pages = int(spec.get("pages") or 1)
+            calls = [(kw, page) for kw in keywords for page in range(1, pages + 1)]
+        elif name in BOARD_SOURCES:
+            calls = [(token, 0) for token in (cfg.get(name) or [])]
+        elif name in FEED_SOURCES:
+            calls = [("", 0)]
+        else:
+            calls = []
+
+        for token, page in calls:
             try:
-                batch = adapter(token, full=full)
+                if name in QUERY_SOURCES:
+                    batch = adapter(token, page=page, full=full)
+                else:
+                    batch = adapter(token, full=full)
             except Exception as exc:  # one dead board must not kill the run
-                errors.append(f"{name}:{token or '-'}: {type(exc).__name__}: {exc}")
+                errors.append(f"{name}:{token or '-'} p{page}: {type(exc).__name__}: {exc}")
                 continue
             if per_board_limit:
                 batch = batch[:per_board_limit]
