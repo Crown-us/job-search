@@ -12,6 +12,7 @@ from rich.table import Table
 
 from . import config, db, pipeline
 from . import analyze as analysis
+from . import digest as daily_digest
 from . import letter as cover_letter
 from . import score as scoring
 from .sources import ADAPTERS, BOARD_SOURCES
@@ -244,6 +245,20 @@ def cmd_letter(args) -> int:
     return 0
 
 
+def cmd_digest(args) -> int:
+    path = daily_digest.write(limit=args.limit, min_fit=args.min_fit, open_after=args.open)
+    console.print(f"[bold]digest[/] {path}")
+    if not args.open:
+        console.print(f"[dim]buka di browser: {path.as_uri()}[/]")
+    if args.email:
+        status = daily_digest.email_html(
+            path.read_text(encoding="utf-8"),
+            f"Lowongan buat Kevin - {path.stem.replace('digest-', '')}",
+        )
+        console.print(f"[bold]email[/] {status}")
+    return 0
+
+
 def cmd_stats(_args) -> int:
     conn = db.connect()
     total = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
@@ -340,6 +355,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("job_id")
     p.add_argument("--no-save", action="store_true")
     p.set_defaults(func=cmd_letter)
+
+    p = sub.add_parser("digest", help="build today's shortlist as a local HTML page")
+    p.add_argument("--limit", type=int, default=12)
+    p.add_argument("--min-fit", type=int, default=55)
+    p.add_argument("--open", action="store_true", help="open it in the default browser")
+    p.add_argument("--email", action="store_true", help="also send it through SMTP")
+    p.set_defaults(func=cmd_digest)
 
     p = sub.add_parser("stats", help="database summary")
     p.set_defaults(func=cmd_stats)

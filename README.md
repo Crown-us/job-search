@@ -35,6 +35,8 @@ python -m jobhunter list --search laravel
 python -m jobhunter enrich --min-score 60 # unduh JD penuh untuk shortlist
 python -m jobhunter analyze --min-score 82   # gap analysis: CV vs JD
 python -m jobhunter letter <id>           # draft cover letter, disimpan ke data/letters/
+python -m jobhunter digest --open         # halaman HTML shortlist hari ini
+python -m jobhunter digest --email        # sekaligus kirim lewat SMTP
 python -m jobhunter stats
 python -m jobhunter score --rescore       # setelah profile.yaml diedit
 python -m jobhunter status <id> applied   # new/shortlist/applied/interview/offer/rejected/skipped
@@ -120,6 +122,27 @@ Salin `.env.example` menjadi `.env`, isi `LLM_API_KEY` (OpenAI-compatible:
 OpenAI, DeepSeek, Groq, OpenRouter, Ollama). Tanpa key, `analyze` dan `letter`
 tetap jalan dengan mesin heuristik; dengan key, keduanya memakai LLM dan
 `engine` di output berubah dari `heuristic` menjadi `llm`.
+
+## Digest harian (tanpa Telegram, tanpa HP)
+
+`digest` menghasilkan satu file HTML mandiri di `data/digest/`: tanpa aset
+eksternal, tanpa akun, jalan offline di browser mana pun. Isinya kartu per
+lowongan — fit, gap, kelebihan, link lamaran, link surat yang sudah dibuat, dan
+perintah untuk menandai status.
+
+Tiga cara memakainya:
+
+1. **Manual** — `python -m jobhunter digest --open`, atau klik dua kali
+   `daily.cmd` yang menjalankan discover → enrich → analyze → digest sekaligus.
+2. **Terjadwal** — Windows Task Scheduler, aksi: jalankan `daily.cmd`.
+   Tidak perlu PowerShell execution policy karena ini file `.cmd`.
+3. **Email** — isi `SMTP_HOST/PORT/USER/PASS/DIGEST_TO` di `.env` (Gmail pakai
+   App Password), lalu `python -m jobhunter digest --email`. Berguna saat HP
+   sedang tidak bisa dipakai; email tetap bisa dibuka dari PC.
+
+Alternatif lain kalau nanti butuh notifikasi: Discord webhook (butuh server
+Discord, tidak butuh HP) atau Windows toast. Yang butuh nomor HP aktif —
+Telegram, WhatsApp — sebaiknya ditunda sampai HP hidup.
 
 ## Batasan yang disengaja
 
