@@ -15,6 +15,7 @@ from . import analyze as analysis
 from . import digest as daily_digest
 from . import letter as cover_letter
 from . import score as scoring
+from . import toast as windows_toast
 from .sources import ADAPTERS, BOARD_SOURCES
 
 console = Console() if sys.stdout.isatty() else Console(width=110)
@@ -259,6 +260,30 @@ def cmd_digest(args) -> int:
     return 0
 
 
+def cmd_toast(args) -> int:
+    conn = db.connect()
+    rows = [
+        dict(r)
+        for r in conn.execute(
+            """
+            SELECT j.id, j.title, j.company, j.score, a.fit
+            FROM jobs j LEFT JOIN analyses a ON a.job_id = j.id
+            WHERE j.status = 'new' AND COALESCE(a.fit, j.score, 0) >= ?
+            ORDER BY COALESCE(a.fit, j.score, 0) DESC
+            LIMIT ?
+            """,
+            (args.min_fit, args.limit),
+        )
+    ]
+    conn.close()
+
+    ok, message, engine = windows_toast.show(
+        "Job Hunter", windows_toast.shortlist_lines(rows), mode=args.mode
+    )
+    console.print(("[green]ok[/] " if ok else "[red]gagal[/] ") + f"[{engine}] {message}")
+    return 0 if ok else 1
+
+
 def cmd_stats(_args) -> int:
     conn = db.connect()
     total = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
@@ -362,6 +387,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--open", action="store_true", help="open it in the default browser")
     p.add_argument("--email", action="store_true", help="also send it through SMTP")
     p.set_defaults(func=cmd_digest)
+
+    p = sub.add_parser("toast", help="pop a Windows notification with today's top picks")
+    p.add_argument("--min-fit", type=int, default=75)
+    p.add_argument("--limit", type=int, default=5)
+    p.add_argument("--mode", choices=["auto", "toast", "balloon"], default="auto")
+    p.set_defaults(func=cmd_toast)
 
     p = sub.add_parser("stats", help="database summary")
     p.set_defaults(func=cmd_stats)

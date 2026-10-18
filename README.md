@@ -144,6 +144,38 @@ Alternatif lain kalau nanti butuh notifikasi: Discord webhook (butuh server
 Discord, tidak butuh HP) atau Windows toast. Yang butuh nomor HP aktif —
 Telegram, WhatsApp — sebaiknya ditunda sampai HP hidup.
 
+## Notifikasi desktop
+
+`python -m jobhunter toast --min-fit 75` memunculkan notifikasi berisi jumlah
+lowongan baru plus dua teratas. Ada dua mesin, dipilih otomatis:
+
+1. **toast native** (`Windows.UI.Notifications`). Tampil di pojok kanan bawah,
+   masuk Action Center, ada suara. Butuh **AppUserModelID** yang dikenali
+   Windows. Proses yang tidak punya *package identity* — termasuk skrip Python
+   biasa — ditolak dengan `0x80073D54`.
+2. **balloon** (`System.Windows.Forms.NotifyIcon`). Tampilan lebih lama, tidak
+   masuk Action Center, tapi tidak butuh registrasi apa pun.
+
+`--mode auto` (default) mencoba toast dulu lalu jatuh ke balloon, dan melaporkan
+mesin mana yang dipakai. `--mode toast` / `--mode balloon` memaksa satu mesin.
+
+Untuk mengaktifkan toast native, daftarkan AppID sekali dari PowerShell biasa
+(bukan dari dalam sandbox, yang memblokir registry):
+
+```powershell
+$p = 'HKCU:\SOFTWARE\Classes\AppUserModelId\JobHunter.Toast'
+New-Item -Path $p -Force
+Set-ItemProperty -Path $p -Name DisplayName -Value 'Job Hunter'
+Set-ItemProperty -Path $p -Name ShowInSettings -Value 1 -Type DWord
+```
+
+lalu isi `TOAST_APP_ID=JobHunter.Toast` di `.env`.
+
+Batas yang tidak bisa dilanggar: toast tidak bisa diklik untuk membuka URL tanpa
+COM activator terdaftar, tidak muncul kalau PC mati, dan ditelan Focus Assist
+tanpa pesan error. Karena itu digest HTML tetap menjadi tempat kerja, toast
+hanya pengingat.
+
 ## Batasan yang disengaja
 
 - Tidak menyentuh LinkedIn (ToS + cepat kena restrict).
