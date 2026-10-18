@@ -7,7 +7,7 @@ a fresh graduate, so it gets folded into the stored description when full=True.
 from __future__ import annotations
 
 from ..model import Job
-from .base import get_json, strip_html
+from .base import extract_job_description, get_json, strip_html
 
 ENDPOINT = "https://www.kalibrr.com/kjs/job_board/search"
 
@@ -64,3 +64,11 @@ def fetch(keyword: str = "", page: int = 1, full: bool = False, limit: int = 20)
             )
         )
     return jobs
+
+
+def fetch_detail(url: str) -> str:
+    from .base import SESSION
+
+    resp = SESSION.get(url, headers={"Accept": "text/html"}, timeout=30)
+    resp.raise_for_status()
+    return extract_job_description(resp.text)

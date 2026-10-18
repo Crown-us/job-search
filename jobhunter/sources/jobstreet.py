@@ -11,7 +11,7 @@ from .base import is_remote, strip_html
 
 import requests
 
-from .base import SESSION
+from .base import SESSION, extract_job_description
 
 ENDPOINT = "https://id.jobstreet.com/api/jobsearch/v5/search"
 
@@ -63,3 +63,10 @@ def fetch(keyword: str, page: int = 1, full: bool = False) -> list[Job]:
             )
         )
     return jobs
+
+
+def fetch_detail(url: str) -> str:
+    """Full JD text from the posting page (JSON-LD, fallback to the ad block)."""
+    resp = SESSION.get(url, headers={"Accept": "text/html"}, timeout=30)
+    resp.raise_for_status()
+    return extract_job_description(resp.text)

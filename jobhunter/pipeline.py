@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import re
+import time
 from datetime import datetime, timedelta, timezone
 
 from . import config, db
 from .model import Job
 from .sources import ADAPTERS, BOARD_SOURCES, FEED_SOURCES, QUERY_SOURCES
+from .sources import jobstreet, kalibrr
 from .sources.base import SOURCE_PRIORITY
+
+# Sources where the search response carries only a teaser and the full JD needs
+# a second request to the posting page.
+DETAIL_FETCHERS = {
+    "jobstreet": jobstreet.fetch_detail,
+    "kalibrr": kalibrr.fetch_detail,
+}
 
 
 def _lower(value) -> str:
@@ -162,3 +171,40 @@ def run_discover(
         result["known"] = known
 
     return result
+
+
+def enrich_jobs(min_chars: int = 300, limit: int = 0, min_score: int = 0, pause: float = 0.6) -> dict:
+    """Fetch the full JD for postings whose stored description is only a teaser."""
+    conn = db.connect()
+    sql = "SELECT id, url, source, title FROM jobs WHERE length(description) < ?"
+    params: list = [min_chars]
+    if min_score:
+        sql += " AND COALESCE(score, -1) >= ?"
+        params.append(min_score)
+    sql += " ORDER BY COALESCE(score, -1) DESC, first_seen DESC"
+    if limit:
+        sql += " LIMIT ?"
+        params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+
+    updated = 0
+    skipped = 0
+    errors: list[str] = []
+    for row in rows:
+        fetcher = DETAIL_FETCHERS.get(row["source"])
+        if fetcher is None:
+            skipped += 1
+            continue
+        try:
+            text = fetcher(row["url"])
+        except Exception as exc:
+            errors.append(f"{row['source']}:{row['title'][:28]}: {type(exc).__name__}")
+            continue
+        if len(text) > min_chars:
+            conn.execute("UPDATE jobs SET description = ? WHERE id = ?", (text, row["id"]))
+            updated += 1
+        time.sleep(pause)
+
+    conn.commit()
+    conn.close()
+    return {"candidates": len(rows), "updated": updated, "skipped": skipped, "errors": errors}

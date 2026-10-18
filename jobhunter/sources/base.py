@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import json
 import re
 
 import requests
@@ -47,3 +48,42 @@ def strip_html(value: str | None) -> str:
 
 def is_remote(location: str) -> bool:
     return bool(re.search(r"\b(remote|anywhere|distributed|wfh)\b", location or "", re.I))
+
+
+_LDJSON = re.compile(
+    r'<script[^>]+type="application/ld\+json"[^>]*>(.*?)</script>', re.S | re.I
+)
+_SEEK_BODY = re.compile(r'data-automation="jobAdDetails"(.*?)</section>', re.S)
+
+
+def _jsonld_objects(page: str):
+    for raw in _LDJSON.findall(page):
+        try:
+            data = json.loads(raw.strip())
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(data, list):
+            yield from data
+        else:
+            yield data
+
+
+def extract_job_description(page: str) -> str:
+    """Pull the ad body out of a job page.
+
+    JSON-LD JobPosting first (clean, standard), then SEEK's rendered block.
+    """
+    for obj in _jsonld_objects(page):
+        if not isinstance(obj, dict):
+            continue
+        kind = obj.get("@type")
+        if kind == "JobPosting" or (isinstance(kind, list) and "JobPosting" in kind):
+            description = obj.get("description")
+            if description:
+                return strip_html(description)
+
+    block = _SEEK_BODY.search(page)
+    if block:
+        return strip_html(block.group(1))
+    return ""
+

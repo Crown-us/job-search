@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 
 from rich.console import Console
 from rich.table import Table
 
 from . import config, db, pipeline
+from . import analyze as analysis
+from . import letter as cover_letter
 from . import score as scoring
 from .sources import ADAPTERS, BOARD_SOURCES
 
@@ -152,6 +155,95 @@ def cmd_score(args) -> int:
     return 0
 
 
+def cmd_enrich(args) -> int:
+    result = pipeline.enrich_jobs(
+        min_chars=args.min_chars, limit=args.limit, min_score=args.min_score
+    )
+    console.print(
+        f"candidates {result['candidates']}  [bold]updated {result['updated']}[/]  "
+        f"skipped {result['skipped']}"
+    )
+    for err in result["errors"][:8]:
+        console.print(f"  [yellow]! {err}[/]")
+    return 0
+
+
+def cmd_analyze(args) -> int:
+    profile = config.profile()
+    conn = db.connect()
+    sql = "SELECT * FROM jobs WHERE length(description) > 300"
+    params: list = []
+    if args.min_score:
+        sql += " AND COALESCE(score, -1) >= ?"
+        params.append(args.min_score)
+    if args.search:
+        sql += " AND (title LIKE ? OR company LIKE ?)"
+        params.extend([f"%{args.search}%"] * 2)
+    sql += " ORDER BY COALESCE(score, -1) DESC LIMIT ?"
+    params.append(args.limit)
+    rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+    if not rows:
+        console.print("[yellow]belum ada JD lengkap — jalankan `python -m jobhunter enrich` dulu[/]")
+        conn.close()
+        return 0
+
+    console.print(f"[dim]engine: {'llm' if analysis.has_llm() else 'heuristic'} | {len(rows)} lowongan[/]")
+    for row in rows:
+        result = analysis.analyze(row, profile)
+        db.save_analysis(conn, row["id"], result)
+        colour = "green" if result["fit"] >= 75 else "yellow" if result["fit"] >= 55 else "red"
+        console.print(
+            f"[{colour}]{result['fit']:>3}[/] {_short(row['title'], 54)} "
+            f"[dim]@ {_short(row['company'], 20)} | skor {row['score']}[/]"
+        )
+        console.print(f"     {result['verdict']}")
+        for gap in result["gaps"][:3]:
+            console.print(f"     [red]- {gap}[/]")
+        for strength in result["strengths"][:2]:
+            console.print(f"     [green]+ {strength}[/]")
+        console.print(f"     [dim]id: {row['id']}[/]")
+    conn.close()
+    return 0
+
+
+def cmd_letter(args) -> int:
+    conn = db.connect()
+    row = conn.execute("SELECT * FROM jobs WHERE id LIKE ?", (f"{args.job_id}%",)).fetchone()
+    conn.close()
+    if row is None:
+        console.print("[red]tidak ada lowongan dengan id itu[/]")
+        return 1
+
+    job = dict(row)
+    if len(job.get("description") or "") < 300:
+        console.print("[yellow]JD masih pendek — jalankan `python -m jobhunter enrich` dulu[/]")
+
+    profile = config.profile()
+    result = analysis.analyze(job, profile)
+    text, engine = cover_letter.build(job, profile, result)
+
+    console.print(
+        f"[bold]{job['title']}[/] @ {job['company']}  "
+        f"[dim]fit={result['fit']} engine={engine}[/]"
+    )
+    console.print("")
+    console.print(text)
+
+    if not args.no_save:
+        out_dir = config.DATA_DIR / "letters"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        slug = re.sub(r"[^a-z0-9]+", "-", (job["company"] + "-" + job["title"]).lower()).strip("-")[:60]
+        path = out_dir / f"{job['id'][:8]}-{slug}.md"
+        path.write_text(
+            f"# {job['title']} — {job['company']}\n\n{job['url']}\n\n{text}\n",
+            encoding="utf-8",
+        )
+        console.print("")
+        console.print(f"[dim]disimpan: {path}[/]")
+    return 0
+
+
 def cmd_stats(_args) -> int:
     conn = db.connect()
     total = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
@@ -231,6 +323,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--show", type=int, default=12)
     p.set_defaults(func=cmd_score)
+
+    p = sub.add_parser("enrich", help="download full job descriptions for shortlisted postings")
+    p.add_argument("--limit", type=int, default=40)
+    p.add_argument("--min-score", type=int, default=0)
+    p.add_argument("--min-chars", type=int, default=300)
+    p.set_defaults(func=cmd_enrich)
+
+    p = sub.add_parser("analyze", help="compare each JD against your profile (gap analysis)")
+    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--min-score", type=int, default=0)
+    p.add_argument("--search", default="")
+    p.set_defaults(func=cmd_analyze)
+
+    p = sub.add_parser("letter", help="draft a tailored cover letter for one posting")
+    p.add_argument("job_id")
+    p.add_argument("--no-save", action="store_true")
+    p.set_defaults(func=cmd_letter)
 
     p = sub.add_parser("stats", help="database summary")
     p.set_defaults(func=cmd_stats)

@@ -12,7 +12,7 @@ Bukan auto-apply. Yang dikerjakan robot adalah bagian yang bikin capek: nyisir
 |---|---|---|
 | 1 | Discovery: 8 adapter (4 ATS global, 2 board ID, 2 feed), SQLite, filter, dedupe | selesai |
 | 1b | Profil dari CV asli + skoring heuristik berbasis track | selesai |
-| 2 | Skoring LLM (CV vs JD penuh) + gap analysis + cover letter | belum |
+| 2 | JD lengkap + gap analysis + cover letter | selesai (heuristik); LLM siap, tinggal API key |
 | 3 | Digest Telegram + dashboard Streamlit + tracker follow-up | belum |
 | 4 | Autofill lamaran (Playwright, submit tetap manual) | opsional |
 
@@ -32,6 +32,9 @@ python -m jobhunter discover              # tarik, filter, dedupe, skor
 python -m jobhunter discover --dry-run    # lihat hasil tanpa nulis DB
 python -m jobhunter list --min-score 70   # yang layak dibaca
 python -m jobhunter list --search laravel
+python -m jobhunter enrich --min-score 60 # unduh JD penuh untuk shortlist
+python -m jobhunter analyze --min-score 82   # gap analysis: CV vs JD
+python -m jobhunter letter <id>           # draft cover letter, disimpan ke data/letters/
 python -m jobhunter stats
 python -m jobhunter score --rescore       # setelah profile.yaml diedit
 python -m jobhunter status <id> applied   # new/shortlist/applied/interview/offer/rejected/skipped
@@ -92,6 +95,31 @@ Tiga jebakan yang sudah dipetakan: JobStreet `.co.id` → Australia, Kalibrr tan
 
 Skor 0–100 plus alasan yang bisa dibaca (`score_reason`). LLM nanti mengganti
 angkanya tapi mempertahankan bentuk output ini.
+
+## JD penuh dan gap analysis
+
+Board ID hanya mengirim teaser di hasil pencarian, jadi `enrich` mengambil
+deskripsi asli dari halaman lowongan. Ekstraktornya membaca JSON-LD `JobPosting`
+dulu, lalu jatuh ke blok `data-automation="jobAdDetails"` milik SEEK.
+
+`analyze` membandingkan JD dengan `profile.yaml` dan mengeluarkan `fit` 0–100:
+
+- **gelar** — JD minta S1/sarjana sementara CV D3 → gap, kecuali JD menyebut
+  fresh graduate dipersilakan
+- **pengalaman** — "min. 2 tahun" dibandingkan 17 bulan magang
+- **teknologi** — hanya kata utuh: `java` tidak lagi cocok dengan `javascript`,
+  dan `excel` cocok dengan "Microsoft Excel"
+
+`letter` menyusun cover letter dari fakta CV: memilih magang yang paling relevan
+dengan JD, menyebut stack yang diminta, dan menjawab gap gelar secara langsung.
+Disimpan ke `data/letters/`.
+
+## Mode LLM (opsional)
+
+Salin `.env.example` menjadi `.env`, isi `LLM_API_KEY` (OpenAI-compatible:
+OpenAI, DeepSeek, Groq, OpenRouter, Ollama). Tanpa key, `analyze` dan `letter`
+tetap jalan dengan mesin heuristik; dengan key, keduanya memakai LLM dan
+`engine` di output berubah dari `heuristic` menjadi `llm`.
 
 ## Batasan yang disengaja
 

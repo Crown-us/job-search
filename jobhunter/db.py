@@ -43,6 +43,16 @@ CREATE TABLE IF NOT EXISTS runs (
     sources     TEXT DEFAULT '',
     note        TEXT DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS analyses (
+    job_id    TEXT PRIMARY KEY,
+    fit       INTEGER,
+    verdict   TEXT DEFAULT '',
+    gaps      TEXT DEFAULT '',
+    strengths TEXT DEFAULT '',
+    engine    TEXT DEFAULT '',
+    created_at TEXT NOT NULL
+);
 """
 
 FIELDS = (
@@ -94,6 +104,26 @@ def finish_run(conn: sqlite3.Connection, run_id: int, **kw) -> None:
         (
             utcnow(), kw.get("fetched", 0), kw.get("inserted", 0), kw.get("kept", 0),
             kw.get("sources", ""), kw.get("note", ""), run_id,
+        ),
+    )
+    conn.commit()
+
+
+def save_analysis(conn: sqlite3.Connection, job_id: str, result: dict) -> None:
+    conn.execute(
+        """INSERT INTO analyses (job_id, fit, verdict, gaps, strengths, engine, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(job_id) DO UPDATE SET
+             fit=excluded.fit, verdict=excluded.verdict, gaps=excluded.gaps,
+             strengths=excluded.strengths, engine=excluded.engine, created_at=excluded.created_at""",
+        (
+            job_id,
+            result.get("fit"),
+            result.get("verdict", ""),
+            "\n".join(result.get("gaps") or []),
+            "\n".join(result.get("strengths") or []),
+            result.get("engine", ""),
+            utcnow(),
         ),
     )
     conn.commit()
