@@ -27,13 +27,27 @@ def main(argv: list[str]) -> int:
     target = argv[0]
     token, _ = discord_sync.credentials()
     webhook = (config.env().get("DISCORD_WEBHOOK_URL") or "").strip()
+    headers = {"Authorization": f"Bot {token}", "User-Agent": "jobhunter/0.1"}
+
+    me = requests.get(f"{API}/users/@me", headers=headers, timeout=20).json()
+    bot_id = me.get("id")
 
     messages = discord_sync.fetch_messages(target, token, limit=100)
-    targets = [m for m in messages if (m.get("author") or {}).get("username") == "Job Hunter"]
-    print(f"{len(targets)} pesan webhook di channel {target}")
+    targets = [
+        m for m in messages
+        if (m.get("author") or {}).get("username") == "Job Hunter"
+        or (m.get("author") or {}).get("id") == bot_id
+    ]
+    print(f"{len(targets)} pesan bot/webhook di channel {target}")
 
     for message in targets:
-        status = requests.delete(f"{webhook}/messages/{message['id']}", timeout=20).status_code
+        author = message.get("author") or {}
+        if author.get("id") == bot_id:
+            # the bot may delete its own messages without Manage Messages
+            endpoint = f"{API}/channels/{target}/messages/{message['id']}"
+            status = requests.delete(endpoint, headers=headers, timeout=20).status_code
+        else:
+            status = requests.delete(f"{webhook}/messages/{message['id']}", timeout=20).status_code
         print(f"  hapus {message['id']} -> {status}")
         time.sleep(0.4)
     return 0

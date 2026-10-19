@@ -40,24 +40,31 @@ def _bot_configured() -> bool:
     return bool((config.env().get("DISCORD_BOT_TOKEN") or "").strip())
 
 
-def _embed(row: dict) -> dict:
+def _embed(row: dict, public: bool = False) -> dict:
     fit = row.get("fit")
     gaps = [g for g in (row.get("gaps") or "").split("\n") if g.strip()][:2]
     strengths = [s for s in (row.get("strengths") or "").split("\n") if s.strip()][:1]
 
     fields = []
-    if fit is not None:
-        fields.append({"name": "fit", "value": str(fit), "inline": True})
-    if row.get("score") is not None:
-        fields.append({"name": "skor", "value": str(row["score"]), "inline": True})
-    if row.get("source"):
-        fields.append({"name": "sumber", "value": str(row["source"]), "inline": True})
-    if gaps:
-        fields.append({"name": "gap", "value": "\n".join(g[:90] for g in gaps)[:1024], "inline": False})
-    if strengths:
-        fields.append(
-            {"name": "plus", "value": "\n".join(s[:90] for s in strengths)[:1024], "inline": False}
-        )
+    if public:
+        # A community feed shows the posting, never the owner's personal gap analysis.
+        if row.get("source"):
+            fields.append({"name": "sumber", "value": str(row["source"]), "inline": True})
+        if row.get("salary"):
+            fields.append({"name": "gaji", "value": str(row["salary"])[:200], "inline": True})
+    else:
+        if fit is not None:
+            fields.append({"name": "fit", "value": str(fit), "inline": True})
+        if row.get("score") is not None:
+            fields.append({"name": "skor", "value": str(row["score"]), "inline": True})
+        if row.get("source"):
+            fields.append({"name": "sumber", "value": str(row["source"]), "inline": True})
+        if gaps:
+            fields.append({"name": "gap", "value": "\n".join(g[:90] for g in gaps)[:1024], "inline": False})
+        if strengths:
+            fields.append(
+                {"name": "plus", "value": "\n".join(s[:90] for s in strengths)[:1024], "inline": False}
+            )
 
     location = row.get("location") or ("Remote" if row.get("remote") else "lokasi tidak disebut")
     return {
@@ -72,11 +79,13 @@ def _embed(row: dict) -> dict:
     }
 
 
-def build_single(row: dict) -> dict:
+def build_single(row: dict, public: bool = False) -> dict:
     """One job per message, so a reaction on it means that job and only that job."""
     fit = row.get("fit")
     location = row.get("location") or ("Remote" if row.get("remote") else "lokasi tidak disebut")
-    if fit is not None:
+    if public:
+        header = location
+    elif fit is not None:
         header = f"**fit {fit}** · skor {row.get('score')} · {location}"
     else:
         header = f"**skor {row.get('score')}** · {location}"
@@ -85,16 +94,21 @@ def build_single(row: dict) -> dict:
     return {
         "username": "Job Hunter",
         "content": header,
-        "embeds": [_embed(row)],
+        "embeds": [_embed(row, public)],
         "allowed_mentions": {"parse": []},
     }
 
 
-def build_payload(rows: list[dict], min_fit: int = 55) -> dict:
+def build_payload(rows: list[dict], min_fit: int = 55, public: bool = False) -> dict:
     today = datetime.now().strftime("%d %b %Y")
-    header = f"**{len(rows)} lowongan layak dilihat** · {today} · fit ≥ {min_fit}"
+    if public:
+        header = f"**{len(rows)} lowongan baru** · {today}"
+    else:
+        header = f"**{len(rows)} lowongan layak dilihat** · {today} · fit ≥ {min_fit}"
     if not rows:
-        header = f"Belum ada lowongan baru di atas fit {min_fit} · {today}"
+        header = f"Belum ada lowongan baru · {today}" if public else (
+            f"Belum ada lowongan baru di atas fit {min_fit} · {today}"
+        )
 
     # Only advertise reactions when a bot is configured to read them back;
     # otherwise the emoji would be decoration that lies.
@@ -104,7 +118,7 @@ def build_payload(rows: list[dict], min_fit: int = 55) -> dict:
     return {
         "username": "Job Hunter",
         "content": header,
-        "embeds": [_embed(row) for row in rows[:MAX_EMBEDS]],
+        "embeds": [_embed(row, public) for row in rows[:MAX_EMBEDS]],
         "allowed_mentions": {"parse": []},
     }
 

@@ -1,4 +1,4 @@
-"""Command line entry point: python -m jobhunter <command>."""
+﻿"""Command line entry point: python -m jobhunter <command>."""
 
 from __future__ import annotations
 
@@ -318,17 +318,17 @@ def cmd_discord(args) -> int:
         rows = keep[: args.limit]
         console.print(f"[dim]track {args.track}: {len(rows)} lowongan[/]")
 
-    payload = discord.build_payload(rows, args.min_fit)
+    payload = discord.build_payload(rows, args.min_fit, public=args.public)
     thread_name = f"Lowongan {datetime.now():%d %b}" if args.thread else None
     attachments = discord.letter_files(rows, limit=5) if args.attach_letters else []
 
     if args.dry_run:
         if args.per_job:
             for row in rows[: args.limit]:
-                console.print(discord.preview(discord.build_single(row)))
+                console.print(discord.preview(discord.build_single(row, public=args.public)))
                 console.print("")
         else:
-            console.print(discord.preview(discord.build_payload(rows, args.min_fit)))
+            console.print(discord.preview(discord.build_payload(rows, args.min_fit, public=args.public)))
         if thread_name:
             console.print(f"[dim]thread: {thread_name}[/]")
         for name, data in attachments:
@@ -346,7 +346,7 @@ def cmd_discord(args) -> int:
         # One message per job: a reaction then maps to exactly one posting.
         sent = 0
         for row in rows:
-            payload = discord.build_single(row)
+            payload = discord.build_single(row, public=args.public)
             files = discord.letter_files([row], limit=1) if args.attach_letters else []
             ok, message, message_id = discord.send(payload, attachments=files)
             if ok:
@@ -360,7 +360,7 @@ def cmd_discord(args) -> int:
         conn.close()
         return 0 if sent else 1
 
-    payload = discord.build_payload(rows, args.min_fit)
+    payload = discord.build_payload(rows, args.min_fit, public=args.public)
     ok, message, _message_id = discord.send(payload, thread_name=thread_name, attachments=attachments)
     console.print(("[green]ok[/] " if ok else "[red]gagal[/] ") + message)
     if ok:
@@ -554,6 +554,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--min-fit", type=int, default=55)
     p.add_argument("--only-new", action="store_true", help="skip jobs already posted to Discord")
     p.add_argument("--track", default="", help="limit to one career track (fullstack, marketing, ...)")
+    p.add_argument("--public", action="store_true", help="hide personal fit/gap fields for a public channel")
     p.add_argument("--per-job", action="store_true", help="one message per job, so reactions map 1:1")
     p.add_argument("--thread", action="store_true", help="post inside a new thread named for today")
     p.add_argument("--attach-letters", action="store_true", help="attach generated cover letters")
@@ -591,3 +592,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
