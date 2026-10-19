@@ -354,7 +354,7 @@ def cmd_discord(args) -> int:
         for row in rows:
             payload = discord.build_single(row, public=args.public)
             files = discord.letter_files([row], limit=1) if args.attach_letters else []
-            ok, message, message_id = discord.send(payload, attachments=files)
+            ok, message, message_id = discord.send(payload, attachments=files, channel_id=args.channel or None)
             if ok:
                 db.record_deliveries(conn, [row["id"]], channel_key, message_id)
                 sent += 1
@@ -367,7 +367,7 @@ def cmd_discord(args) -> int:
         return 0 if sent else 1
 
     payload = discord.build_payload(rows, args.min_fit, public=args.public)
-    ok, message, _message_id = discord.send(payload, thread_name=thread_name, attachments=attachments)
+    ok, message, _message_id = discord.send(payload, thread_name=thread_name, attachments=attachments, channel_id=args.channel or None)
     console.print(("[green]ok[/] " if ok else "[red]gagal[/] ") + message)
     if ok:
         db.record_deliveries(conn, [row["id"] for row in rows], channel_key)
@@ -600,5 +600,6 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
 
 

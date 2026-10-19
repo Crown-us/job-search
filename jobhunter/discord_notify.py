@@ -200,16 +200,17 @@ def send(
     timeout: int = 20,
     thread_name: str | None = None,
     attachments: list[tuple[str, bytes]] | None = None,
+    channel_id: str | None = None,
 ) -> tuple[bool, str, str | None]:
     """Returns (ok, detail, message_id). message_id is None unless wait=true replied.
 
     Posts as the bot when DISCORD_BOT_TOKEN is configured (messages it owns can
     be deleted later without Manage Messages); otherwise falls back to the
-    webhook, which needs no bot at all.
+    webhook, which needs no bot at all. `channel_id` overrides the .env target.
     """
     env = config.env()
     bot_token = (env.get("DISCORD_BOT_TOKEN") or "").strip()
-    bot_channel = (env.get("DISCORD_CHANNEL_ID") or "").strip()
+    bot_channel = (channel_id or env.get("DISCORD_CHANNEL_ID") or "").strip()
 
     if bot_token and bot_channel:
         return _send_as_bot(payload, bot_token, bot_channel, attachments, timeout)
