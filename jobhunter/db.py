@@ -68,10 +68,19 @@ FIELDS = (
 )
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns that CREATE TABLE IF NOT EXISTS cannot add to an existing table."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(deliveries)")}
+    if "message_id" not in columns:
+        conn.execute("ALTER TABLE deliveries ADD COLUMN message_id TEXT")
+    conn.commit()
+
+
 def connect(path: Path | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(path or db_path())
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
 
 
@@ -143,10 +152,30 @@ def delivered_ids(conn: sqlite3.Connection, channel: str) -> set[str]:
     )}
 
 
-def record_deliveries(conn: sqlite3.Connection, job_ids: list[str], channel: str) -> None:
+def record_deliveries(
+    conn: sqlite3.Connection,
+    job_ids: list[str],
+    channel: str,
+    message_id: str | None = None,
+) -> None:
     now = utcnow()
     conn.executemany(
-        "INSERT OR IGNORE INTO deliveries (job_id, channel, sent_at) VALUES (?, ?, ?)",
-        [(job_id, channel, now) for job_id in job_ids],
+        """INSERT INTO deliveries (job_id, channel, sent_at, message_id)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(job_id, channel) DO UPDATE SET
+             sent_at = excluded.sent_at,
+             message_id = COALESCE(excluded.message_id, deliveries.message_id)""",
+        [(job_id, channel, now, message_id) for job_id in job_ids],
     )
     conn.commit()
+
+
+def delivery_by_message(conn: sqlite3.Connection, channel: str) -> dict[str, str]:
+    """message_id -> job_id, so reactions can be mapped without reading message content."""
+    return {
+        str(row[0]): row[1]
+        for row in conn.execute(
+            "SELECT message_id, job_id FROM deliveries WHERE channel = ? AND message_id IS NOT NULL",
+            (channel,),
+        )
+    }

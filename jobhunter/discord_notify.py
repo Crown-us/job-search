@@ -1,8 +1,9 @@
 """Discord webhook delivery for the daily shortlist.
 
 A webhook is a plain HTTPS endpoint: no bot, no OAuth, no gateway connection.
-One POST with up to 10 embeds per message. Discord answers 204 on success and
-429 with a JSON retry_after when the webhook is rate limited (30 calls/minute).
+One POST with up to 10 embeds per message. Discord answers 204 on success,
+200 when `wait=true` (which also returns the message id), and 429 with a JSON
+retry_after when the webhook is rate limited (30 calls/minute).
 
 Setup is documented in README; the URL comes from .env as DISCORD_WEBHOOK_URL.
 """
@@ -12,6 +13,7 @@ from __future__ import annotations
 import json
 import time
 from datetime import datetime
+from pathlib import Path
 
 import requests
 
@@ -19,6 +21,9 @@ from . import config
 
 COLOURS = {"good": 0x2F9E5F, "mid": 0xC8922A, "low": 0xB44D4D}
 MAX_EMBEDS = 10
+
+REACTION_HELP = "✅ applied · 🔖 simpan · ❌ skip · 📅 interview"
+REACTION_HELP_SYNC = REACTION_HELP + " — jalankan `jobhunter sync`"
 
 
 def _tone(fit: int | None) -> str:
@@ -29,6 +34,10 @@ def _tone(fit: int | None) -> str:
     if fit >= 55:
         return "mid"
     return "low"
+
+
+def _bot_configured() -> bool:
+    return bool((config.env().get("DISCORD_BOT_TOKEN") or "").strip())
 
 
 def _embed(row: dict) -> dict:
@@ -57,7 +66,27 @@ def _embed(row: dict) -> dict:
         "description": f"{row.get('company', '')} · {location}",
         "color": COLOURS[_tone(fit)],
         "fields": fields[:6],
-        "footer": {"text": f"id {str(row.get('id', ''))[:8]} · python -m jobhunter letter {str(row.get('id', ''))[:8]}"},
+        "footer": {
+            "text": f"id {str(row.get('id', ''))[:8]} · python -m jobhunter letter {str(row.get('id', ''))[:8]}"
+        },
+    }
+
+
+def build_single(row: dict) -> dict:
+    """One job per message, so a reaction on it means that job and only that job."""
+    fit = row.get("fit")
+    location = row.get("location") or ("Remote" if row.get("remote") else "lokasi tidak disebut")
+    if fit is not None:
+        header = f"**fit {fit}** · skor {row.get('score')} · {location}"
+    else:
+        header = f"**skor {row.get('score')}** · {location}"
+    if _bot_configured():
+        header += "\n" + REACTION_HELP
+    return {
+        "username": "Job Hunter",
+        "content": header,
+        "embeds": [_embed(row)],
+        "allowed_mentions": {"parse": []},
     }
 
 
@@ -69,8 +98,8 @@ def build_payload(rows: list[dict], min_fit: int = 55) -> dict:
 
     # Only advertise reactions when a bot is configured to read them back;
     # otherwise the emoji would be decoration that lies.
-    if (config.env().get("DISCORD_BOT_TOKEN") or "").strip():
-        header += "\n✅ applied · 🔖 simpan · ❌ skip · 📅 interview — jalankan `jobhunter sync`"
+    if _bot_configured():
+        header += "\n" + REACTION_HELP_SYNC
 
     return {
         "username": "Job Hunter",
@@ -101,16 +130,15 @@ def send(
     timeout: int = 20,
     thread_name: str | None = None,
     attachments: list[tuple[str, bytes]] | None = None,
-) -> tuple[bool, str]:
+) -> tuple[bool, str, str | None]:
+    """Returns (ok, detail, message_id). message_id is None unless wait=true replied."""
     env = config.env()
     url = (webhook_url or env.get("DISCORD_WEBHOOK_URL") or "").strip()
     if not url:
-        return False, "DISCORD_WEBHOOK_URL belum diisi di .env"
+        return False, "DISCORD_WEBHOOK_URL belum diisi di .env", None
     if not url.startswith("https://discord.com/api/webhooks/"):
-        return False, "URL bukan webhook Discord yang valid (harus https://discord.com/api/webhooks/...)"
+        return False, "URL bukan webhook Discord yang valid", None
 
-    # wait=true returns the message object (200) instead of 204, which gives us
-    # the message id — useful later for reaction-based status.
     params: dict[str, str] = {"wait": "true"}
     if thread_name:
         params["thread_name"] = thread_name[:100]
@@ -133,15 +161,24 @@ def send(
     try:
         resp = _post()
     except requests.RequestException as exc:
-        return False, f"koneksi gagal: {type(exc).__name__}"
+        return False, f"koneksi gagal: {type(exc).__name__}", None
 
     if resp.status_code in (200, 204):
         detail = f"terkirim ({len(payload.get('embeds') or [])} embed)"
+        message_id: str | None = None
+        if resp.status_code == 200:
+            try:
+                body = resp.json()
+                raw_id = body.get("id")
+                message_id = str(raw_id) if raw_id else None
+                detail += f" | id {message_id}"
+            except (json.JSONDecodeError, ValueError):
+                detail += " | respons bukan json"
         if attachments:
             detail += f", {len(attachments)} surat"
         if thread_name:
             detail += f", thread '{thread_name[:100]}'"
-        return True, detail
+        return True, detail, message_id
 
     if resp.status_code == 429:
         try:
@@ -151,7 +188,7 @@ def send(
         time.sleep(min(retry_after, 5))
         retry = _post()
         if retry.status_code in (200, 204):
-            return True, f"terkirim setelah rate limit ({retry_after:.1f}s)"
+            return True, f"terkirim setelah rate limit ({retry_after:.1f}s)", None
 
     detail = ""
     try:
@@ -159,7 +196,7 @@ def send(
         detail = str(body.get("message") or body)[:160]
     except (json.JSONDecodeError, ValueError):
         detail = resp.text[:160]
-    return False, f"HTTP {resp.status_code}: {detail}"
+    return False, f"HTTP {resp.status_code}: {detail}", None
 
 
 _ASCII_MAP = str.maketrans({"≥": ">=", "·": "-", "–": "-", "—": "-", "→": "->", "’": "'"})
@@ -167,7 +204,8 @@ _ASCII_MAP = str.maketrans({"≥": ">=", "·": "-", "–": "-", "—": "-", "→
 
 def _ascii(text: str) -> str:
     """Terminal-safe preview: legacy Windows consoles are cp1252 and crash on ≥ and ·."""
-    return text.translate(_ASCII_MAP)
+    out = text.translate(_ASCII_MAP)
+    return out.encode("ascii", "replace").decode("ascii")
 
 
 def preview(payload: dict) -> str:

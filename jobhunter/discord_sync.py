@@ -94,15 +94,34 @@ def sync(limit: int = 50, dry_run: bool = False) -> dict:
         row["url"]: dict(row)
         for row in conn.execute("SELECT id, url, title, status FROM jobs")
     }
+    by_id = {
+        row["id"]: dict(row)
+        for row in conn.execute("SELECT id, url, title, status FROM jobs")
+    }
+    # Authoritative mapping: the message id captured when the digest was posted.
+    # Works even without the Message Content intent, which blanks embeds on read.
+    message_to_job = db.delivery_by_message(conn, "discord")
 
     changed: list[tuple[str, str, str]] = []
     seen: set[str] = set()
     for message in messages:
+        emojis = reactions_of(message)
+        if not emojis:
+            continue
+
+        candidates: list[dict] = []
+        mapped = message_to_job.get(str(message.get("id")))
+        if mapped and mapped in by_id:
+            candidates.append(by_id[mapped])
         for embed in message.get("embeds") or []:
             job = by_url.get(embed.get("url") or "")
-            if job is None or job["id"] in seen:
+            if job and job not in candidates:
+                candidates.append(job)
+
+        for job in candidates:
+            if job["id"] in seen:
                 continue
-            for emoji in reactions_of(message):
+            for emoji in emojis:
                 status = EMOJI_STATUS.get(emoji)
                 if not status or status == job["status"]:
                     continue

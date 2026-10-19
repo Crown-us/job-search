@@ -223,19 +223,44 @@ Setup, sekali saja, tanpa bot dan tanpa nomor HP:
 Uji tanpa mengirim: `python -m jobhunter discord --dry-run` mencetak isi pesan.
 Hapus `--dry-run` untuk benar-benar mengirim.
 
-Dua flag yang merapikan channel:
+Tiga mode pengiriman:
 
-- `--thread` — pesan masuk ke thread baru bernama `Lowongan 19 Oct`, jadi channel
-  utama tetap bersih dan tiap hari bisa dibaca terpisah.
-- `--attach-letters` — cover letter yang sudah digenerate untuk lowongan di batch
-  itu ikut dilampirkan sebagai file `.md` (maksimal 5). Tinggal buka di Discord,
-  copy, tempel ke form lamaran. Nggak perlu balik ke terminal.
+- **satu pesan berisi banyak kartu** (`--limit 8`) — paling ringkas, tapi reaksi
+  tidak bisa menunjuk kartu tertentu karena reaksi menempel ke pesan.
+- **`--thread`** — pesan masuk ke thread baru bernama `Lowongan 19 Oct`, jadi
+  channel utama tetap bersih.
+- **`--per-job`** — satu pesan per lowongan. Ini yang dipakai `daily.cmd`, karena
+  setiap pesan menyimpan message id-nya sehingga reaksi ✅ hanya mengubah job itu.
 
-`daily.cmd` memakai keduanya:
+`--attach-letters` melampirkan cover letter `.md`; pada `--per-job` surat ikut ke
+pesan lowongannya masing-masing.
 
 ```
-python -m jobhunter discord --only-new --limit 5 --min-fit 75 --thread --attach-letters
+python -m jobhunter discord --only-new --limit 5 --min-fit 75 --per-job --attach-letters
 ```
+
+## Reaksi jadi status lamaran
+
+`python -m jobhunter sync` membaca reaksi di channel dan mengubah status:
+
+| Reaksi | Status |
+|---|---|
+| ✅ | applied |
+| 🔖 | shortlist |
+| ❌ | skipped |
+| 📅 | interview |
+| 🏆 | offer |
+
+Mapping-nya lewat **message id yang disimpan saat mengirim** (kolom
+`deliveries.message_id`), bukan dengan membaca isi pesan. Ini penting: bot tanpa
+privileged **Message Content intent** tetap menerima metadata dan reaksi, tapi
+`content`/`embeds`/`attachments` dikosongkan Discord. Karena kita mencocokkan
+lewat id, sync tetap jalan tanpa intent tersebut.
+
+Kalau ingin pesan juga terbaca lengkap lewat API (misal untuk debugging),
+nyalakan **MESSAGE CONTENT INTENT** di Developer Portal → Bot → Privileged
+Gateway Intents, lalu `python scripts/check_message_intent.py` untuk memastikan
+flag-nya sudah aktif.
 
 Tingkat lanjutan yang **belum** dibuat, sengaja: reaksi ✅ untuk menandai
 `applied` butuh bot token, undangan bot ke server, dan proses polling REST

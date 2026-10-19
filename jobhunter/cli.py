@@ -6,6 +6,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from datetime import datetime
 
 from rich.console import Console
@@ -311,7 +312,12 @@ def cmd_discord(args) -> int:
     attachments = discord.letter_files(rows, limit=5) if args.attach_letters else []
 
     if args.dry_run:
-        console.print(discord.preview(payload))
+        if args.per_job:
+            for row in rows[: args.limit]:
+                console.print(discord.preview(discord.build_single(row)))
+                console.print("")
+        else:
+            console.print(discord.preview(discord.build_payload(rows, args.min_fit)))
         if thread_name:
             console.print(f"[dim]thread: {thread_name}[/]")
         for name, data in attachments:
@@ -325,7 +331,26 @@ def cmd_discord(args) -> int:
         conn.close()
         return 0
 
-    ok, message = discord.send(payload, thread_name=thread_name, attachments=attachments)
+    if args.per_job:
+        # One message per job: a reaction then maps to exactly one posting.
+        sent = 0
+        for row in rows:
+            payload = discord.build_single(row)
+            files = discord.letter_files([row], limit=1) if args.attach_letters else []
+            ok, message, message_id = discord.send(payload, attachments=files)
+            if ok:
+                db.record_deliveries(conn, [row["id"]], "discord", message_id)
+                sent += 1
+                console.print(f"  [green]ok[/] {_short(row['title'], 44)} [dim]{message}[/]")
+            else:
+                console.print(f"  [red]x[/] {_short(row['title'], 44)} {message}")
+            time.sleep(1.2)  # stay well under the 30/min webhook limit
+        console.print(f"terkirim {sent}/{len(rows)} pesan")
+        conn.close()
+        return 0 if sent else 1
+
+    payload = discord.build_payload(rows, args.min_fit)
+    ok, message, _message_id = discord.send(payload, thread_name=thread_name, attachments=attachments)
     console.print(("[green]ok[/] " if ok else "[red]gagal[/] ") + message)
     if ok:
         db.record_deliveries(conn, [row["id"] for row in rows], "discord")
@@ -517,6 +542,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=8)
     p.add_argument("--min-fit", type=int, default=55)
     p.add_argument("--only-new", action="store_true", help="skip jobs already posted to Discord")
+    p.add_argument("--per-job", action="store_true", help="one message per job, so reactions map 1:1")
     p.add_argument("--thread", action="store_true", help="post inside a new thread named for today")
     p.add_argument("--attach-letters", action="store_true", help="attach generated cover letters")
     p.add_argument("--dry-run", action="store_true", help="print the payload instead of sending")
