@@ -40,3 +40,12 @@ lever: []
 # Workable returned empty for every candidate; Indonesian boards (Glints,
 # JobStreet, Kalibrr, Dealls) need their own adapters, not this API.
 workable: []
+
+# Remote feeds. Each entry is one HTTP call, no keyword needed.
+# hackernews is left out on purpose: its parsing is rough and it floods the DB.
+feeds:
+  - remoteok
+  - remotive
+  - jobicy
+  - himalayas
+  - arbeitnow

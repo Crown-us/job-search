@@ -105,7 +105,11 @@ def run_discover(
     searches = config.searches()
     flt = config.filters()
 
-    wanted = sources or [name for name in ADAPTERS if cfg.get(name) or searches.get(name)]
+    wanted = sources or [
+        name
+        for name in ADAPTERS
+        if cfg.get(name) or searches.get(name) or name in (cfg.get("feeds") or [])
+    ]
     fetched = 0
     kept: list[Job] = []
     by_source: dict[str, int] = {}

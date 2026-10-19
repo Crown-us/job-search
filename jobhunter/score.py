@@ -35,6 +35,19 @@ US_CITY = re.compile(
 )
 YEARS = re.compile(r"\b([3-9]|1[0-9])\+?\s*years?\b", re.I)
 
+# Remote but geographically locked: fine for those countries, useless from Indonesia.
+GEO_LOCKED = re.compile(
+    r"\b(usa|u\.s\.|united states|canada|uk|united kingdom|ireland|germany|france|spain|"
+    r"portugal|poland|netherlands|belgium|sweden|norway|denmark|finland|switzerland|"
+    r"austria|italy|czech|romania|brazil|mexico|argentina|colombia|australia|new zealand|"
+    r"japan|korea|singapore|india|philippines|vietnam|malaysia|thailand)\b",
+    re.I,
+)
+# These mean "no restriction worth worrying about".
+GEO_OPEN = re.compile(
+    r"\b(worldwide|anywhere|global|remote|asia|apac|sea|southeast asia|indonesia)\b", re.I
+)
+
 
 _KW_CACHE: dict[str, re.Pattern[str]] = {}
 
@@ -108,6 +121,14 @@ def score_one(job: dict, profile: dict) -> tuple[int, list[str]]:
     elif US_ONLY.search(location) or US_ONLY.search(description[:600]) or US_CITY.search(location):
         score -= 18
         reasons.append("kemungkinan butuh izin kerja US/EU (-18)")
+    elif (
+        job.get("remote")
+        and GEO_LOCKED.search(location)
+        and not GEO_OPEN.search(location)
+    ):
+        # "Remote" but only hireable from one country.
+        score -= 12
+        reasons.append(f"remote terkunci ke {location.strip()[:24]} (-12)")
 
     if _hits(title, ENTRY_HINTS):
         score += 8

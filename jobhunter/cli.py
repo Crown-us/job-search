@@ -1,4 +1,4 @@
-﻿"""Command line entry point: python -m jobhunter <command>."""
+"""Command line entry point: python -m jobhunter <command>."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from . import discord_sync
 from . import letter as cover_letter
 from . import score as scoring
 from . import toast as windows_toast
-from .sources import ADAPTERS, BOARD_SOURCES
+from .sources import ADAPTERS, BOARD_SOURCES, FEED_SOURCES
 
 console = Console() if sys.stdout.isatty() else Console(width=110)
 
@@ -305,6 +305,12 @@ def cmd_discord(args) -> int:
     if args.only_new:
         sql += " AND j.id NOT IN (SELECT job_id FROM deliveries WHERE channel = ?)"
         params.append(channel_key)
+    if args.remote:
+        sql += " AND j.remote = 1"
+    if args.feeds_only:
+        marks = ",".join("?" * len(FEED_SOURCES))
+        sql += f" AND j.source IN ({marks})"
+        params.extend(sorted(FEED_SOURCES))
     sql += " ORDER BY (a.fit IS NOT NULL) DESC, COALESCE(a.fit, j.score, 0) DESC, j.score DESC LIMIT ?"
 
     wanted_tracks = {t.strip() for t in (args.tracks or "").split(",") if t.strip()}
@@ -563,6 +569,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tracks", default="", help="comma separated tracks, e.g. fullstack,it_support")
     p.add_argument("--channel", default="", help="post to this channel id instead of the one in .env")
     p.add_argument("--public", action="store_true", help="hide personal fit/gap fields for a public channel")
+    p.add_argument("--remote", action="store_true", help="only postings flagged remote")
+    p.add_argument("--feeds-only", action="store_true", help="only postings from the remote feeds")
     p.add_argument("--per-job", action="store_true", help="one message per job, so reactions map 1:1")
     p.add_argument("--thread", action="store_true", help="post inside a new thread named for today")
     p.add_argument("--attach-letters", action="store_true", help="attach generated cover letters")
@@ -600,6 +608,8 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
 
 
 

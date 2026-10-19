@@ -39,11 +39,10 @@ def credentials() -> tuple[str, str]:
 
 
 def channel_ids() -> list[str]:
-    """Every feed channel: the main one plus the creative one, when configured."""
+    """Every feed channel: main, creative, and remote, when configured."""
     env = config.env()
-    main = (env.get("DISCORD_CHANNEL_ID") or "").strip()
-    kreatif = (env.get("DISCORD_CHANNEL_KREATIF") or "").strip()
-    return [channel for channel in (main, kreatif) if channel]
+    keys = ("DISCORD_CHANNEL_ID", "DISCORD_CHANNEL_KREATIF", "DISCORD_CHANNEL_REMOTE")
+    return [value for key in keys if (value := (env.get(key) or "").strip())]
 
 
 def fetch_messages(channel_id: str, token: str, limit: int = 50) -> list[dict]:

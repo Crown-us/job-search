@@ -107,6 +107,28 @@ python -m jobhunter clean             # hapus
 Jalankan `python scripts/why_filtered.py` untuk melihat alasan penolakan tiap
 baris (perusahaan, judul, lokasi, atau umur posting).
 
+## Feed remote
+
+Lima API publik, satu request masing-masing, tanpa auth. Diaktifkan lewat
+`feeds:` di `companies.yaml`.
+
+| Sumber | Isi | Catatan |
+|---|---|---|
+| Remotive | ~12 lowongan kurasi | punya `candidate_required_location` |
+| Jobicy | ~50 | `jobGeo` jelas (Anywhere / USA / region) |
+| Himalayas | ~20 | ada rentang gaji + `locationRestrictions` |
+| RemoteOK | ~60 | butuh User-Agent browser; ada gaji |
+| Arbeitnow | ~300 | kebanyakan Jerman on-site; hanya `remote: true` yang lolos filter |
+
+Semuanya ditandai `remote=1`. Skor memberi penalti `-18` untuk lowongan yang
+terkunci ke US/EU (butuh izin kerja) dan `-12` untuk remote yang menyebut satu
+negara tertentu tanpa kata "worldwide/anywhere/asia". Tanpa penalti itu,
+"Remote - Ireland" akan nongkrong di puncak daftar padahal mustahil dilamar
+dari Indonesia.
+
+Hacker News sengaja **tidak** diaktifkan: parsing-nya kasar dan membanjiri
+database dengan baris yang tidak relevan.
+
 ## Dedupe
 
 1. `id` = SHA1 dari URL yang dibersihkan dari parameter tracking.
