@@ -176,6 +176,35 @@ COM activator terdaftar, tidak muncul kalau PC mati, dan ditelan Focus Assist
 tanpa pesan error. Karena itu digest HTML tetap menjadi tempat kerja, toast
 hanya pengingat.
 
+## Discord webhook
+
+`python -m jobhunter discord --min-fit 60` mengirim shortlist ke channel Discord
+sebagai satu pesan: header jumlah lowongan + maksimal 10 embed (judul jadi link,
+fit, skor, sumber, gap, plus). Warna embed mengikuti fit: hijau >= 75, kuning >= 55,
+merah di bawahnya.
+
+Setup, sekali saja, tanpa bot dan tanpa nomor HP:
+
+1. Daftar/masuk Discord lewat browser atau aplikasi desktop - registrasi cukup email.
+2. Buat server pribadi: `+` di sidebar -> Create My Own -> beri nama.
+3. Server Settings -> **Integrations** -> **Webhooks** -> **New Webhook**.
+4. Pilih channel, beri nama "Job Hunter", lalu **Copy Webhook URL**.
+5. Isi `.env`: `DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...`
+
+Uji tanpa mengirim: `python -m jobhunter discord --dry-run` mencetak isi pesan.
+Hapus `--dry-run` untuk benar-benar mengirim.
+
+Catatan:
+
+- Webhook URL itu **kredensial**. Siapa pun yang memegangnya bisa memposting ke
+  channel itu. Jangan di-commit - `.env` sudah masuk `.gitignore`.
+- Batas Discord: 10 embed per pesan, sekitar 30 request per menit per webhook.
+  Kode menangani `429` dengan menunggu `retry_after` lalu mengirim sekali lagi.
+- Pesan webhook tidak bisa dijadikan tombol interaktif tanpa aplikasi terdaftar;
+  karena itu tiap embed hanya berisi link ke lowongan.
+- `daily.cmd` sudah memanggil langkah ini sebagai langkah 6; kalau URL kosong,
+  ia hanya mencetak peringatan dan lanjut.
+
 ## Batasan yang disengaja
 
 - Tidak menyentuh LinkedIn (ToS + cepat kena restrict).

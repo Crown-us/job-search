@@ -13,12 +13,18 @@ from rich.table import Table
 from . import config, db, pipeline
 from . import analyze as analysis
 from . import digest as daily_digest
+from . import discord_notify as discord
 from . import letter as cover_letter
 from . import score as scoring
 from . import toast as windows_toast
 from .sources import ADAPTERS, BOARD_SOURCES
 
 console = Console() if sys.stdout.isatty() else Console(width=110)
+
+try:  # legacy Windows consoles default to cp1252 and crash on "≥" or "·"
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 SRC_SHORT = {
     "greenhouse": "gh",
@@ -284,6 +290,34 @@ def cmd_toast(args) -> int:
     return 0 if ok else 1
 
 
+def cmd_discord(args) -> int:
+    conn = db.connect()
+    rows = [
+        dict(r)
+        for r in conn.execute(
+            """
+            SELECT j.*, a.fit, a.verdict, a.gaps, a.strengths
+            FROM jobs j LEFT JOIN analyses a ON a.job_id = j.id
+            WHERE j.status IN ('new', 'shortlist') AND COALESCE(a.fit, j.score, 0) >= ?
+            ORDER BY COALESCE(a.fit, j.score, 0) DESC, j.score DESC
+            LIMIT ?
+            """,
+            (args.min_fit, args.limit),
+        )
+    ]
+    conn.close()
+
+    payload = discord.build_payload(rows, args.min_fit)
+    if args.dry_run:
+        console.print(discord.preview(payload))
+        console.print("[dim]dry run: tidak dikirim[/]")
+        return 0
+
+    ok, message = discord.send(payload)
+    console.print(("[green]ok[/] " if ok else "[red]gagal[/] ") + message)
+    return 0 if ok else 1
+
+
 def cmd_stats(_args) -> int:
     conn = db.connect()
     total = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
@@ -393,6 +427,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=5)
     p.add_argument("--mode", choices=["auto", "toast", "balloon"], default="auto")
     p.set_defaults(func=cmd_toast)
+
+    p = sub.add_parser("discord", help="post today's shortlist to a Discord webhook")
+    p.add_argument("--limit", type=int, default=8)
+    p.add_argument("--min-fit", type=int, default=55)
+    p.add_argument("--dry-run", action="store_true", help="print the payload instead of sending")
+    p.set_defaults(func=cmd_discord)
 
     p = sub.add_parser("stats", help="database summary")
     p.set_defaults(func=cmd_stats)
