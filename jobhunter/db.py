@@ -53,6 +53,13 @@ CREATE TABLE IF NOT EXISTS analyses (
     engine    TEXT DEFAULT '',
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS deliveries (
+    job_id   TEXT NOT NULL,
+    channel  TEXT NOT NULL,
+    sent_at  TEXT NOT NULL,
+    PRIMARY KEY (job_id, channel)
+);
 """
 
 FIELDS = (
@@ -125,5 +132,21 @@ def save_analysis(conn: sqlite3.Connection, job_id: str, result: dict) -> None:
             result.get("engine", ""),
             utcnow(),
         ),
+    )
+    conn.commit()
+
+
+def delivered_ids(conn: sqlite3.Connection, channel: str) -> set[str]:
+    """Ids already pushed to a channel, so daily runs do not repost the same jobs."""
+    return {row[0] for row in conn.execute(
+        "SELECT job_id FROM deliveries WHERE channel = ?", (channel,)
+    )}
+
+
+def record_deliveries(conn: sqlite3.Connection, job_ids: list[str], channel: str) -> None:
+    now = utcnow()
+    conn.executemany(
+        "INSERT OR IGNORE INTO deliveries (job_id, channel, sent_at) VALUES (?, ?, ?)",
+        [(job_id, channel, now) for job_id in job_ids],
     )
     conn.commit()

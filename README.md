@@ -204,6 +204,15 @@ Catatan:
   karena itu tiap embed hanya berisi link ke lowongan.
 - `daily.cmd` sudah memanggil langkah ini sebagai langkah 6; kalau URL kosong,
   ia hanya mencetak peringatan dan lanjut.
+- `--only-new` melewati lowongan yang sudah pernah dikirim ke channel itu. Setiap
+  pengiriman dicatat di tabel `deliveries` (job_id, channel, sent_at), jadi
+  menjalankan perintah dua kali tidak memposting hal yang sama.
+- Saat filter ini pertama kali dipakai, database masih punya backlog: semua
+  lowongan lama di atas ambang akan dikirim bertahap. Naikkan `--min-fit` atau
+  kecilkan `--limit` kalau channel terasa ramai; `daily.cmd` memakai
+  `--limit 5 --min-fit 75`.
+- `python scripts/delivery_state.py` menunjukkan berapa yang sudah terkirim dan
+  berapa yang masih tersisa.
 
 ## Batasan yang disengaja
 

@@ -19,7 +19,7 @@ echo [5/6] notifikasi desktop...
 python -m jobhunter toast --min-fit 75
 
 echo [6/6] kirim ke Discord (kalau DISCORD_WEBHOOK_URL terisi)...
-python -m jobhunter discord --limit 8 --min-fit 60
+python -m jobhunter discord --only-new --limit 5 --min-fit 75
 
 echo.
 echo Selesai. Digest ada di data\digest\

@@ -292,29 +292,35 @@ def cmd_toast(args) -> int:
 
 def cmd_discord(args) -> int:
     conn = db.connect()
-    rows = [
-        dict(r)
-        for r in conn.execute(
-            """
-            SELECT j.*, a.fit, a.verdict, a.gaps, a.strengths
-            FROM jobs j LEFT JOIN analyses a ON a.job_id = j.id
-            WHERE j.status IN ('new', 'shortlist') AND COALESCE(a.fit, j.score, 0) >= ?
-            ORDER BY COALESCE(a.fit, j.score, 0) DESC, j.score DESC
-            LIMIT ?
-            """,
-            (args.min_fit, args.limit),
-        )
-    ]
-    conn.close()
+    sql = """
+        SELECT j.*, a.fit, a.verdict, a.gaps, a.strengths
+        FROM jobs j LEFT JOIN analyses a ON a.job_id = j.id
+        WHERE j.status IN ('new', 'shortlist') AND COALESCE(a.fit, j.score, 0) >= ?
+    """
+    params: list = [args.min_fit]
+    if args.only_new:
+        sql += " AND j.id NOT IN (SELECT job_id FROM deliveries WHERE channel = 'discord')"
+    sql += " ORDER BY COALESCE(a.fit, j.score, 0) DESC, j.score DESC LIMIT ?"
+    params.append(args.limit)
+    rows = [dict(r) for r in conn.execute(sql, params)]
 
     payload = discord.build_payload(rows, args.min_fit)
     if args.dry_run:
         console.print(discord.preview(payload))
         console.print("[dim]dry run: tidak dikirim[/]")
+        conn.close()
+        return 0
+
+    if not rows:
+        console.print("[dim]tidak ada lowongan baru untuk dikirim[/]")
+        conn.close()
         return 0
 
     ok, message = discord.send(payload)
     console.print(("[green]ok[/] " if ok else "[red]gagal[/] ") + message)
+    if ok:
+        db.record_deliveries(conn, [row["id"] for row in rows], "discord")
+    conn.close()
     return 0 if ok else 1
 
 
@@ -431,6 +437,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("discord", help="post today's shortlist to a Discord webhook")
     p.add_argument("--limit", type=int, default=8)
     p.add_argument("--min-fit", type=int, default=55)
+    p.add_argument("--only-new", action="store_true", help="skip jobs already posted to Discord")
     p.add_argument("--dry-run", action="store_true", help="print the payload instead of sending")
     p.set_defaults(func=cmd_discord)
 
