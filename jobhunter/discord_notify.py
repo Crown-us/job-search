@@ -66,6 +66,12 @@ def build_payload(rows: list[dict], min_fit: int = 55) -> dict:
     header = f"**{len(rows)} lowongan layak dilihat** · {today} · fit ≥ {min_fit}"
     if not rows:
         header = f"Belum ada lowongan baru di atas fit {min_fit} · {today}"
+
+    # Only advertise reactions when a bot is configured to read them back;
+    # otherwise the emoji would be decoration that lies.
+    if (config.env().get("DISCORD_BOT_TOKEN") or "").strip():
+        header += "\n✅ applied · 🔖 simpan · ❌ skip · 📅 interview — jalankan `jobhunter sync`"
+
     return {
         "username": "Job Hunter",
         "content": header,

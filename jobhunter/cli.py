@@ -15,6 +15,7 @@ from . import config, db, pipeline
 from . import analyze as analysis
 from . import digest as daily_digest
 from . import discord_notify as discord
+from . import discord_sync
 from . import letter as cover_letter
 from . import score as scoring
 from . import toast as windows_toast
@@ -332,6 +333,19 @@ def cmd_discord(args) -> int:
     return 0 if ok else 1
 
 
+def cmd_sync(args) -> int:
+    result = discord_sync.sync(limit=args.limit, dry_run=args.dry_run)
+    if not result["ok"]:
+        console.print(f"[red]gagal[/] {result['error']}")
+        return 1
+    if not result["changed"]:
+        console.print("[dim]tidak ada reaksi yang mengubah status[/]")
+    for job_id, title, status in result["changed"]:
+        console.print(f"  [green]{status:<10}[/] {_short(title, 48)} [dim]({job_id[:8]})[/]")
+    console.print(f"[dim]memindai {result['scanned']} pesan | {discord_sync.legend()}[/]")
+    return 0
+
+
 def cmd_clean(args) -> int:
     """Delete stored postings that no longer pass filters.yaml."""
     from .model import Job
@@ -507,6 +521,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--attach-letters", action="store_true", help="attach generated cover letters")
     p.add_argument("--dry-run", action="store_true", help="print the payload instead of sending")
     p.set_defaults(func=cmd_discord)
+
+    p = sub.add_parser("sync", help="apply Discord reactions to job statuses")
+    p.add_argument("--limit", type=int, default=50, help="how many recent messages to scan")
+    p.add_argument("--dry-run", action="store_true", help="show changes without writing")
+    p.set_defaults(func=cmd_sync)
 
     p = sub.add_parser("clean", help="delete stored postings that violate current filters")
     p.add_argument("--dry-run", action="store_true", help="list them without deleting")
