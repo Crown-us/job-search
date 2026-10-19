@@ -303,7 +303,7 @@ def cmd_discord(args) -> int:
     params: list = [args.min_fit]
     if args.only_new:
         sql += " AND j.id NOT IN (SELECT job_id FROM deliveries WHERE channel = 'discord')"
-    sql += " ORDER BY COALESCE(a.fit, j.score, 0) DESC, j.score DESC LIMIT ?"
+    sql += " ORDER BY (a.fit IS NOT NULL) DESC, COALESCE(a.fit, j.score, 0) DESC, j.score DESC LIMIT ?"
     params.append(args.limit)
     rows = [dict(r) for r in conn.execute(sql, params)]
 

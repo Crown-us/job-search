@@ -38,7 +38,7 @@ def _load(limit: int, min_fit: int) -> list[sqlite3.Row]:
         LEFT JOIN analyses a ON a.job_id = j.id
         WHERE j.status IN ('new', 'shortlist')
           AND COALESCE(a.fit, j.score, 0) >= ?
-        ORDER BY COALESCE(a.fit, j.score, 0) DESC, j.score DESC
+        ORDER BY (a.fit IS NOT NULL) DESC, COALESCE(a.fit, j.score, 0) DESC, j.score DESC
         LIMIT ?
         """,
         (min_fit, limit),
