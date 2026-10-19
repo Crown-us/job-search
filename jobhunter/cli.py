@@ -311,6 +311,10 @@ def cmd_discord(args) -> int:
         marks = ",".join("?" * len(FEED_SOURCES))
         sql += f" AND j.source IN ({marks})"
         params.extend(sorted(FEED_SOURCES))
+    if args.exclude_feeds:
+        marks = ",".join("?" * len(FEED_SOURCES))
+        sql += f" AND j.source NOT IN ({marks})"
+        params.extend(sorted(FEED_SOURCES))
     sql += " ORDER BY (a.fit IS NOT NULL) DESC, COALESCE(a.fit, j.score, 0) DESC, j.score DESC LIMIT ?"
 
     wanted_tracks = {t.strip() for t in (args.tracks or "").split(",") if t.strip()}
@@ -571,6 +575,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--public", action="store_true", help="hide personal fit/gap fields for a public channel")
     p.add_argument("--remote", action="store_true", help="only postings flagged remote")
     p.add_argument("--feeds-only", action="store_true", help="only postings from the remote feeds")
+    p.add_argument("--exclude-feeds", action="store_true", help="skip remote feeds (they have their own channel)")
     p.add_argument("--per-job", action="store_true", help="one message per job, so reactions map 1:1")
     p.add_argument("--thread", action="store_true", help="post inside a new thread named for today")
     p.add_argument("--attach-letters", action="store_true", help="attach generated cover letters")
