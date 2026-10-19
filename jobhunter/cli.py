@@ -304,8 +304,19 @@ def cmd_discord(args) -> int:
     if args.only_new:
         sql += " AND j.id NOT IN (SELECT job_id FROM deliveries WHERE channel = 'discord')"
     sql += " ORDER BY (a.fit IS NOT NULL) DESC, COALESCE(a.fit, j.score, 0) DESC, j.score DESC LIMIT ?"
-    params.append(args.limit)
+    params.append(1000 if args.track else args.limit)
     rows = [dict(r) for r in conn.execute(sql, params)]
+
+    if args.track:
+        tracks = config.profile().get("tracks") or {}
+        keep = []
+        for row in rows:
+            headline = f"{row.get('title') or ''} {row.get('department') or ''}"
+            best = scoring._best_track(headline, tracks)
+            if best and best[1] == args.track:
+                keep.append(row)
+        rows = keep[: args.limit]
+        console.print(f"[dim]track {args.track}: {len(rows)} lowongan[/]")
 
     payload = discord.build_payload(rows, args.min_fit)
     thread_name = f"Lowongan {datetime.now():%d %b}" if args.thread else None
@@ -542,6 +553,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=8)
     p.add_argument("--min-fit", type=int, default=55)
     p.add_argument("--only-new", action="store_true", help="skip jobs already posted to Discord")
+    p.add_argument("--track", default="", help="limit to one career track (fullstack, marketing, ...)")
     p.add_argument("--per-job", action="store_true", help="one message per job, so reactions map 1:1")
     p.add_argument("--thread", action="store_true", help="post inside a new thread named for today")
     p.add_argument("--attach-letters", action="store_true", help="attach generated cover letters")

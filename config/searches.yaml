@@ -12,6 +12,13 @@ jobstreet:
     - backend developer
     - it support
     - junior programmer
+    # jalur non-teknis
+    - digital marketing
+    - social media specialist
+    - video editor
+    - graphic designer
+    - desain grafis
+    - content creator
   pages: 2
 
 # Kalibrr searches on `text` (not q/search/q). Without it the endpoint returns
@@ -26,4 +33,8 @@ kalibrr:
     - junior developer
     - frontend developer
     - backend developer
+    - digital marketing
+    - social media
+    - video editor
+    - graphic designer
   pages: 1

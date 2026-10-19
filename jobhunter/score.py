@@ -36,9 +36,22 @@ US_CITY = re.compile(
 YEARS = re.compile(r"\b([3-9]|1[0-9])\+?\s*years?\b", re.I)
 
 
+_KW_CACHE: dict[str, re.Pattern[str]] = {}
+
+
+def _kw_pattern(needle: str) -> re.Pattern[str]:
+    """Word-ish boundary so 'ai' does not match inside 'desain'."""
+    pattern = _KW_CACHE.get(needle)
+    if pattern is None:
+        pattern = re.compile(
+            r"(?<![\w+#.])" + re.escape(needle.strip()) + r"(?![\w+#])", re.I
+        )
+        _KW_CACHE[needle] = pattern
+    return pattern
+
+
 def _hits(text: str, needles) -> list[str]:
-    low = text.lower()
-    return [n for n in needles if n and str(n).lower() in low]
+    return [str(n) for n in needles if n and _kw_pattern(str(n)).search(text)]
 
 
 def _best_track(headline: str, tracks: dict) -> tuple[float, str, list[str], list[str]] | None:
