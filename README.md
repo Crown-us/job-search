@@ -223,6 +223,27 @@ Setup, sekali saja, tanpa bot dan tanpa nomor HP:
 Uji tanpa mengirim: `python -m jobhunter discord --dry-run` mencetak isi pesan.
 Hapus `--dry-run` untuk benar-benar mengirim.
 
+Dua flag yang merapikan channel:
+
+- `--thread` — pesan masuk ke thread baru bernama `Lowongan 19 Oct`, jadi channel
+  utama tetap bersih dan tiap hari bisa dibaca terpisah.
+- `--attach-letters` — cover letter yang sudah digenerate untuk lowongan di batch
+  itu ikut dilampirkan sebagai file `.md` (maksimal 5). Tinggal buka di Discord,
+  copy, tempel ke form lamaran. Nggak perlu balik ke terminal.
+
+`daily.cmd` memakai keduanya:
+
+```
+python -m jobhunter discord --only-new --limit 5 --min-fit 75 --thread --attach-letters
+```
+
+Tingkat lanjutan yang **belum** dibuat, sengaja: reaksi ✅ untuk menandai
+`applied` butuh bot token, undangan bot ke server, dan proses polling REST
+(`GET /channels/{id}/messages/{mid}/reactions/...`). Tombol interaktif lebih
+berat lagi karena butuh endpoint publik atau koneksi gateway. Keduanya baru
+layak kalau tracking lewat CLI sudah terasa mengganggu - selama masih di depan
+PC, `python -m jobhunter status <id> applied` lebih cepat.
+
 Catatan:
 
 - Webhook URL itu **kredensial**. Siapa pun yang memegangnya bisa memposting ke

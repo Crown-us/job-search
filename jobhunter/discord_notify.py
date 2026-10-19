@@ -74,7 +74,28 @@ def build_payload(rows: list[dict], min_fit: int = 55) -> dict:
     }
 
 
-def send(payload: dict, webhook_url: str | None = None, timeout: int = 20) -> tuple[bool, str]:
+def letter_files(rows: list[dict], limit: int = 5) -> list[tuple[str, bytes]]:
+    """Generated cover letters for these postings, ready to attach to the message."""
+    folder = config.DATA_DIR / "letters"
+    if not folder.exists():
+        return []
+    payloads: list[tuple[str, bytes]] = []
+    for row in rows:
+        matches = sorted(folder.glob(f"{str(row.get('id', ''))[:8]}-*.md"))
+        if matches:
+            payloads.append((matches[0].name, matches[0].read_bytes()))
+        if len(payloads) >= limit:
+            break
+    return payloads
+
+
+def send(
+    payload: dict,
+    webhook_url: str | None = None,
+    timeout: int = 20,
+    thread_name: str | None = None,
+    attachments: list[tuple[str, bytes]] | None = None,
+) -> tuple[bool, str]:
     env = config.env()
     url = (webhook_url or env.get("DISCORD_WEBHOOK_URL") or "").strip()
     if not url:
@@ -82,13 +103,39 @@ def send(payload: dict, webhook_url: str | None = None, timeout: int = 20) -> tu
     if not url.startswith("https://discord.com/api/webhooks/"):
         return False, "URL bukan webhook Discord yang valid (harus https://discord.com/api/webhooks/...)"
 
+    # wait=true returns the message object (200) instead of 204, which gives us
+    # the message id — useful later for reaction-based status.
+    params: dict[str, str] = {"wait": "true"}
+    if thread_name:
+        params["thread_name"] = thread_name[:100]
+
+    def _post() -> requests.Response:
+        if attachments:
+            files = {
+                f"files[{index}]": (name, data)
+                for index, (name, data) in enumerate(attachments)
+            }
+            return requests.post(
+                url,
+                params=params,
+                data={"payload_json": json.dumps(payload)},
+                files=files,
+                timeout=timeout,
+            )
+        return requests.post(url, params=params, json=payload, timeout=timeout)
+
     try:
-        resp = requests.post(url, json=payload, timeout=timeout)
+        resp = _post()
     except requests.RequestException as exc:
         return False, f"koneksi gagal: {type(exc).__name__}"
 
     if resp.status_code in (200, 204):
-        return True, f"terkirim ({len(payload.get('embeds') or [])} embed)"
+        detail = f"terkirim ({len(payload.get('embeds') or [])} embed)"
+        if attachments:
+            detail += f", {len(attachments)} surat"
+        if thread_name:
+            detail += f", thread '{thread_name[:100]}'"
+        return True, detail
 
     if resp.status_code == 429:
         try:
@@ -96,7 +143,7 @@ def send(payload: dict, webhook_url: str | None = None, timeout: int = 20) -> tu
         except (json.JSONDecodeError, TypeError, ValueError):
             retry_after = 1.0
         time.sleep(min(retry_after, 5))
-        retry = requests.post(url, json=payload, timeout=timeout)
+        retry = _post()
         if retry.status_code in (200, 204):
             return True, f"terkirim setelah rate limit ({retry_after:.1f}s)"
 

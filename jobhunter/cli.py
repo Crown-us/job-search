@@ -6,6 +6,7 @@ import argparse
 import json
 import re
 import sys
+from datetime import datetime
 
 from rich.console import Console
 from rich.table import Table
@@ -305,8 +306,15 @@ def cmd_discord(args) -> int:
     rows = [dict(r) for r in conn.execute(sql, params)]
 
     payload = discord.build_payload(rows, args.min_fit)
+    thread_name = f"Lowongan {datetime.now():%d %b}" if args.thread else None
+    attachments = discord.letter_files(rows, limit=5) if args.attach_letters else []
+
     if args.dry_run:
         console.print(discord.preview(payload))
+        if thread_name:
+            console.print(f"[dim]thread: {thread_name}[/]")
+        for name, data in attachments:
+            console.print(f"[dim]lampiran: {name} ({len(data)} bytes)[/]")
         console.print("[dim]dry run: tidak dikirim[/]")
         conn.close()
         return 0
@@ -316,7 +324,7 @@ def cmd_discord(args) -> int:
         conn.close()
         return 0
 
-    ok, message = discord.send(payload)
+    ok, message = discord.send(payload, thread_name=thread_name, attachments=attachments)
     console.print(("[green]ok[/] " if ok else "[red]gagal[/] ") + message)
     if ok:
         db.record_deliveries(conn, [row["id"] for row in rows], "discord")
@@ -495,6 +503,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=8)
     p.add_argument("--min-fit", type=int, default=55)
     p.add_argument("--only-new", action="store_true", help="skip jobs already posted to Discord")
+    p.add_argument("--thread", action="store_true", help="post inside a new thread named for today")
+    p.add_argument("--attach-letters", action="store_true", help="attach generated cover letters")
     p.add_argument("--dry-run", action="store_true", help="print the payload instead of sending")
     p.set_defaults(func=cmd_discord)
 
