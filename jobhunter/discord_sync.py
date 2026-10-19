@@ -38,6 +38,14 @@ def credentials() -> tuple[str, str]:
     )
 
 
+def channel_ids() -> list[str]:
+    """Every feed channel: the main one plus the creative one, when configured."""
+    env = config.env()
+    main = (env.get("DISCORD_CHANNEL_ID") or "").strip()
+    kreatif = (env.get("DISCORD_CHANNEL_KREATIF") or "").strip()
+    return [channel for channel in (main, kreatif) if channel]
+
+
 def fetch_messages(channel_id: str, token: str, limit: int = 50) -> list[dict]:
     resp = requests.get(
         f"{API}/channels/{channel_id}/messages",
@@ -82,13 +90,6 @@ def sync(limit: int = 50, dry_run: bool = False) -> dict:
             "changed": [],
         }
 
-    try:
-        messages = fetch_messages(channel_id, token, limit)
-    except (PermissionError, LookupError) as exc:
-        return {"ok": False, "error": str(exc), "changed": []}
-    except requests.RequestException as exc:
-        return {"ok": False, "error": f"koneksi gagal: {type(exc).__name__}", "changed": []}
-
     conn = db.connect()
     by_url = {
         row["url"]: dict(row)
@@ -98,43 +99,57 @@ def sync(limit: int = 50, dry_run: bool = False) -> dict:
         row["id"]: dict(row)
         for row in conn.execute("SELECT id, url, title, status FROM jobs")
     }
-    # Authoritative mapping: the message id captured when the digest was posted.
-    # Works even without the Message Content intent, which blanks embeds on read.
-    message_to_job = db.delivery_by_message(conn, "discord")
 
     changed: list[tuple[str, str, str]] = []
     seen: set[str] = set()
-    for message in messages:
-        emojis = reactions_of(message)
-        if not emojis:
-            continue
+    scanned = 0
 
-        candidates: list[dict] = []
-        mapped = message_to_job.get(str(message.get("id")))
-        if mapped and mapped in by_id:
-            candidates.append(by_id[mapped])
-        for embed in message.get("embeds") or []:
-            job = by_url.get(embed.get("url") or "")
-            if job and job not in candidates:
-                candidates.append(job)
+    for target in channel_ids():
+        try:
+            messages = fetch_messages(target, token, limit)
+        except (PermissionError, LookupError) as exc:
+            conn.close()
+            return {"ok": False, "error": str(exc), "changed": changed}
+        except requests.RequestException as exc:
+            conn.close()
+            return {"ok": False, "error": f"koneksi gagal: {type(exc).__name__}", "changed": changed}
+        scanned += len(messages)
 
-        for job in candidates:
-            if job["id"] in seen:
+        # Authoritative mapping: the message id captured when the digest was posted.
+        # Works even without the Message Content intent, which blanks embeds on read.
+        message_to_job = db.delivery_by_message(conn, target)
+
+        for message in messages:
+            emojis = reactions_of(message)
+            if not emojis:
                 continue
-            for emoji in emojis:
-                status = EMOJI_STATUS.get(emoji)
-                if not status or status == job["status"]:
+
+            candidates: list[dict] = []
+            mapped = message_to_job.get(str(message.get("id")))
+            if mapped and mapped in by_id:
+                candidates.append(by_id[mapped])
+            for embed in message.get("embeds") or []:
+                job = by_url.get(embed.get("url") or "")
+                if job and job not in candidates:
+                    candidates.append(job)
+
+            for job in candidates:
+                if job["id"] in seen:
                     continue
-                changed.append((job["id"], job["title"], status))
-                seen.add(job["id"])
-                if not dry_run:
-                    conn.execute("UPDATE jobs SET status = ? WHERE id = ?", (status, job["id"]))
-                break
+                for emoji in emojis:
+                    status = EMOJI_STATUS.get(emoji)
+                    if not status or status == job["status"]:
+                        continue
+                    changed.append((job["id"], job["title"], status))
+                    seen.add(job["id"])
+                    if not dry_run:
+                        conn.execute("UPDATE jobs SET status = ? WHERE id = ?", (status, job["id"]))
+                    break
 
     if not dry_run:
         conn.commit()
     conn.close()
-    return {"ok": True, "error": "", "changed": changed, "scanned": len(messages)}
+    return {"ok": True, "error": "", "changed": changed, "scanned": scanned}
 
 
 def legend() -> str:

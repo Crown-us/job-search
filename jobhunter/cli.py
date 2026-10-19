@@ -295,6 +295,7 @@ def cmd_toast(args) -> int:
 
 def cmd_discord(args) -> int:
     conn = db.connect()
+    channel_key = args.channel or "discord"
     sql = """
         SELECT j.*, a.fit, a.verdict, a.gaps, a.strengths
         FROM jobs j LEFT JOIN analyses a ON a.job_id = j.id
@@ -302,21 +303,26 @@ def cmd_discord(args) -> int:
     """
     params: list = [args.min_fit]
     if args.only_new:
-        sql += " AND j.id NOT IN (SELECT job_id FROM deliveries WHERE channel = 'discord')"
+        sql += " AND j.id NOT IN (SELECT job_id FROM deliveries WHERE channel = ?)"
+        params.append(channel_key)
     sql += " ORDER BY (a.fit IS NOT NULL) DESC, COALESCE(a.fit, j.score, 0) DESC, j.score DESC LIMIT ?"
-    params.append(1000 if args.track else args.limit)
+
+    wanted_tracks = {t.strip() for t in (args.tracks or "").split(",") if t.strip()}
+    if args.track:
+        wanted_tracks.add(args.track)
+    params.append(1000 if wanted_tracks else args.limit)
     rows = [dict(r) for r in conn.execute(sql, params)]
 
-    if args.track:
+    if wanted_tracks:
         tracks = config.profile().get("tracks") or {}
         keep = []
         for row in rows:
             headline = f"{row.get('title') or ''} {row.get('department') or ''}"
             best = scoring._best_track(headline, tracks)
-            if best and best[1] == args.track:
+            if best and best[1] in wanted_tracks:
                 keep.append(row)
         rows = keep[: args.limit]
-        console.print(f"[dim]track {args.track}: {len(rows)} lowongan[/]")
+        console.print(f"[dim]{','.join(sorted(wanted_tracks))}: {len(rows)} lowongan[/]")
 
     payload = discord.build_payload(rows, args.min_fit, public=args.public)
     thread_name = f"Lowongan {datetime.now():%d %b}" if args.thread else None
@@ -350,7 +356,7 @@ def cmd_discord(args) -> int:
             files = discord.letter_files([row], limit=1) if args.attach_letters else []
             ok, message, message_id = discord.send(payload, attachments=files)
             if ok:
-                db.record_deliveries(conn, [row["id"]], "discord", message_id)
+                db.record_deliveries(conn, [row["id"]], channel_key, message_id)
                 sent += 1
                 console.print(f"  [green]ok[/] {_short(row['title'], 44)} [dim]{message}[/]")
             else:
@@ -364,7 +370,7 @@ def cmd_discord(args) -> int:
     ok, message, _message_id = discord.send(payload, thread_name=thread_name, attachments=attachments)
     console.print(("[green]ok[/] " if ok else "[red]gagal[/] ") + message)
     if ok:
-        db.record_deliveries(conn, [row["id"] for row in rows], "discord")
+        db.record_deliveries(conn, [row["id"] for row in rows], channel_key)
     conn.close()
     return 0 if ok else 1
 
@@ -554,6 +560,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--min-fit", type=int, default=55)
     p.add_argument("--only-new", action="store_true", help="skip jobs already posted to Discord")
     p.add_argument("--track", default="", help="limit to one career track (fullstack, marketing, ...)")
+    p.add_argument("--tracks", default="", help="comma separated tracks, e.g. fullstack,it_support")
+    p.add_argument("--channel", default="", help="post to this channel id instead of the one in .env")
     p.add_argument("--public", action="store_true", help="hide personal fit/gap fields for a public channel")
     p.add_argument("--per-job", action="store_true", help="one message per job, so reactions map 1:1")
     p.add_argument("--thread", action="store_true", help="post inside a new thread named for today")
@@ -592,4 +600,5 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
 
