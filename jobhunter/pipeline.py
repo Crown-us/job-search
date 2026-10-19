@@ -47,7 +47,13 @@ def passes_filters(job: Job, flt: dict) -> bool:
     title = _lower(job.title)
     if any(_lower(k) in title for k in flt.get("exclude_title_keywords") or []):
         return False
-    if any(_lower(k) in _lower(job.company) for k in flt.get("exclude_company_keywords") or []):
+
+    # Anonymous advertisers cannot be researched and are a common home for
+    # scam postings, so they are dropped even when the keyword list misses them.
+    company = (job.company or "").strip()
+    if flt.get("require_company_name", True) and (not company or company.lower() == "unknown"):
+        return False
+    if any(_lower(k) in _lower(company) for k in flt.get("exclude_company_keywords") or []):
         return False
 
     must = [_lower(k) for k in flt.get("must_have_any") or []]

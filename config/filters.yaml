@@ -30,7 +30,18 @@ exclude_title_keywords:
   - paralegal
   - payroll
 
-exclude_company_keywords: []
+# Lowongan tanpa identitas perusahaan (JobStreet menandainya "Private
+# Advertiser") tidak bisa diriset dan sering jadi sarang penipuan. Ditolak.
+exclude_company_keywords:
+  - private advertiser
+  - confidential
+  - anonymous
+  - undisclosed
+  - tanpa nama
+  - perusahaan rahasia
+
+# Tolak juga lowongan yang nama perusahaannya kosong atau "Unknown".
+require_company_name: true
 
 # Empty means no keyword gate — scoring decides. Fill it once profile.yaml is set,
 # e.g. [python, sql, support, it, data, automation, prompt]

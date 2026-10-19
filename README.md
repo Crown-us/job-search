@@ -38,6 +38,8 @@ python -m jobhunter letter <id>           # draft cover letter, disimpan ke data
 python -m jobhunter digest --open         # halaman HTML shortlist hari ini
 python -m jobhunter digest --email        # sekaligus kirim lewat SMTP
 python -m jobhunter stats
+python -m jobhunter clean --dry-run       # lihat lowongan yang melanggar filter sekarang
+python -m jobhunter clean                 # hapus dari database (status new/shortlist saja)
 python -m jobhunter score --rescore       # setelah profile.yaml diedit
 python -m jobhunter status <id> applied   # new/shortlist/applied/interview/offer/rejected/skipped
 python -m jobhunter probe                 # cek board ATS mana yang masih hidup
@@ -77,6 +79,33 @@ jobhunter/
 
 Tiga jebakan yang sudah dipetakan: JobStreet `.co.id` → Australia, Kalibrr tanpa
 `text=` → feed Ruangguru, Glints → 404 di semua endpoint `/api/v1`.
+
+## Lowongan anonim ditolak
+
+JobStreet menandai pengiklan tanpa identitas sebagai **"Private Advertiser"**.
+Lowongan seperti itu tidak bisa diriset — tidak ada nama perusahaan, tidak ada
+alamat, tidak ada jejak — dan di Indonesia pola ini sering dipakai untuk
+lowongan abal-abal atau jebakan biaya administrasi. Karena itu ditolak di dua
+tempat:
+
+1. `filters.yaml` → `exclude_company_keywords` memuat `private advertiser`,
+   `confidential`, `anonymous`, `undisclosed`, `tanpa nama`, `perusahaan rahasia`.
+2. `require_company_name: true` membuang lowongan yang nama perusahaannya kosong
+   atau "Unknown", termasuk kalau suatu saat sumber baru mengirim data cacat.
+
+Filter berjalan **sebelum** insert, jadi lowongan anonim tidak pernah masuk
+database lagi. Untuk membereskan yang sudah terlanjur tersimpan:
+
+```powershell
+python -m jobhunter clean --dry-run   # lihat dulu
+python -m jobhunter clean             # hapus
+```
+
+`clean` hanya menyentuh status `new` dan `shortlist`; lowongan yang sudah
+`applied` atau `interview` tidak dihapus karena itu riwayat lamaran.
+
+Jalankan `python scripts/why_filtered.py` untuk melihat alasan penolakan tiap
+baris (perusahaan, judul, lokasi, atau umur posting).
 
 ## Dedupe
 

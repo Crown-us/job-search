@@ -324,6 +324,63 @@ def cmd_discord(args) -> int:
     return 0 if ok else 1
 
 
+def cmd_clean(args) -> int:
+    """Delete stored postings that no longer pass filters.yaml."""
+    from .model import Job
+
+    flt = config.filters()
+    conn = db.connect()
+    # Never delete something the user already acted on: applied/interview rows
+    # are history, not candidates.
+    rows = [
+        dict(r)
+        for r in conn.execute("SELECT * FROM jobs WHERE status IN ('new', 'shortlist')")
+    ]
+
+    victims = []
+    for row in rows:
+        job = Job(
+            source=row["source"],
+            company=row["company"],
+            title=row["title"],
+            url=row["url"],
+            location=row["location"] or "",
+            remote=bool(row["remote"]),
+            salary=row["salary"] or "",
+            department=row["department"] or "",
+            description=row["description"] or "",
+            posted_at=row["posted_at"] or "",
+        )
+        if not pipeline.passes_filters(job, flt):
+            victims.append(row)
+
+    if not victims:
+        console.print("database sudah bersih, tidak ada yang melanggar filter")
+        conn.close()
+        return 0
+
+    for row in victims[:15]:
+        console.print(f"  [red]x[/] {(row['company'] or '-')[:28]:<30} {_short(row['title'], 46)}")
+    if len(victims) > 15:
+        console.print(f"  [dim]... dan {len(victims) - 15} lainnya[/]")
+    console.print(f"[bold]{len(victims)}[/] lowongan tidak lolos filter")
+
+    if args.dry_run:
+        console.print("[dim]dry run: tidak ada yang dihapus[/]")
+        conn.close()
+        return 0
+
+    ids = [(row["id"],) for row in victims]
+    conn.executemany("DELETE FROM jobs WHERE id = ?", ids)
+    conn.executemany("DELETE FROM analyses WHERE job_id = ?", ids)
+    conn.executemany("DELETE FROM deliveries WHERE job_id = ?", ids)
+    conn.commit()
+    left = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+    conn.close()
+    console.print(f"dihapus. sisa [bold]{left}[/] lowongan")
+    return 0
+
+
 def cmd_stats(_args) -> int:
     conn = db.connect()
     total = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
@@ -440,6 +497,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--only-new", action="store_true", help="skip jobs already posted to Discord")
     p.add_argument("--dry-run", action="store_true", help="print the payload instead of sending")
     p.set_defaults(func=cmd_discord)
+
+    p = sub.add_parser("clean", help="delete stored postings that violate current filters")
+    p.add_argument("--dry-run", action="store_true", help="list them without deleting")
+    p.set_defaults(func=cmd_clean)
 
     p = sub.add_parser("stats", help="database summary")
     p.set_defaults(func=cmd_stats)
