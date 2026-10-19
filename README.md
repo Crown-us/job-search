@@ -212,6 +212,19 @@ sebagai satu pesan: header jumlah lowongan + maksimal 10 embed (judul jadi link,
 fit, skor, sumber, gap, plus). Warna embed mengikuti fit: hijau >= 75, kuning >= 55,
 merah di bawahnya.
 
+Dua jalur pengiriman, dipilih otomatis:
+
+- **bot** — kalau `DISCORD_BOT_TOKEN` dan `DISCORD_CHANNEL_ID` terisi, pesan
+  dikirim lewat `POST /channels/{id}/messages`. Ini yang dipakai sekarang:
+  pesannya milik bot, jadi bisa dihapus sendiri tanpa `Manage Messages`, dan
+  isinya tetap terbaca oleh bot meski privileged Message Content intent mati
+  (intent hanya membatasi pesan milik orang lain).
+- **webhook** — fallback tanpa bot. Cukup URL webhook, tanpa token.
+
+Catatan operasional: memindahkan webhook ke channel lain lewat API butuh
+`Manage Webhooks`. Tanpa izin itu Discord membalas **200 tetapi `channel_id`
+tidak berubah** — jangan percaya status code-nya, baca body responsnya.
+
 Setup, sekali saja, tanpa bot dan tanpa nomor HP:
 
 1. Daftar/masuk Discord lewat browser atau aplikasi desktop - registrasi cukup email.

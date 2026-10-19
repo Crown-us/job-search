@@ -124,6 +124,62 @@ def letter_files(rows: list[dict], limit: int = 5) -> list[tuple[str, bytes]]:
     return payloads
 
 
+API = "https://discord.com/api/v10"
+
+
+def _send_as_bot(
+    payload: dict,
+    token: str,
+    channel_id: str,
+    attachments: list[tuple[str, bytes]] | None,
+    timeout: int,
+) -> tuple[bool, str, str | None]:
+    """POST /channels/{id}/messages. Bot messages can be deleted by the bot itself."""
+    url = f"{API}/channels/{channel_id}/messages"
+    headers = {"Authorization": f"Bot {token}", "User-Agent": "jobhunter/0.1"}
+    body = {k: v for k, v in payload.items() if k != "username"}
+
+    try:
+        if attachments:
+            files = {
+                f"files[{index}]": (name, data)
+                for index, (name, data) in enumerate(attachments)
+            }
+            resp = requests.post(
+                url,
+                headers=headers,
+                data={"payload_json": json.dumps(body)},
+                files=files,
+                timeout=timeout,
+            )
+        else:
+            resp = requests.post(url, headers=headers, json=body, timeout=timeout)
+    except requests.RequestException as exc:
+        return False, f"koneksi gagal: {type(exc).__name__}", None
+
+    if resp.status_code in (200, 201):
+        detail = f"terkirim ({len(payload.get('embeds') or [])} embed)"
+        message_id = None
+        try:
+            data = resp.json()
+            raw_id = data.get("id")
+            message_id = str(raw_id) if raw_id else None
+            detail += f" | id {message_id}"
+        except (json.JSONDecodeError, ValueError):
+            pass
+        if attachments:
+            detail += f", {len(attachments)} surat"
+        return True, detail, message_id
+
+    detail = ""
+    try:
+        body_err = resp.json()
+        detail = str(body_err.get("message") or body_err)[:160]
+    except (json.JSONDecodeError, ValueError):
+        detail = resp.text[:160]
+    return False, f"HTTP {resp.status_code}: {detail}", None
+
+
 def send(
     payload: dict,
     webhook_url: str | None = None,
@@ -131,11 +187,22 @@ def send(
     thread_name: str | None = None,
     attachments: list[tuple[str, bytes]] | None = None,
 ) -> tuple[bool, str, str | None]:
-    """Returns (ok, detail, message_id). message_id is None unless wait=true replied."""
+    """Returns (ok, detail, message_id). message_id is None unless wait=true replied.
+
+    Posts as the bot when DISCORD_BOT_TOKEN is configured (messages it owns can
+    be deleted later without Manage Messages); otherwise falls back to the
+    webhook, which needs no bot at all.
+    """
     env = config.env()
+    bot_token = (env.get("DISCORD_BOT_TOKEN") or "").strip()
+    bot_channel = (env.get("DISCORD_CHANNEL_ID") or "").strip()
+
+    if bot_token and bot_channel:
+        return _send_as_bot(payload, bot_token, bot_channel, attachments, timeout)
+
     url = (webhook_url or env.get("DISCORD_WEBHOOK_URL") or "").strip()
     if not url:
-        return False, "DISCORD_WEBHOOK_URL belum diisi di .env", None
+        return False, "DISCORD_WEBHOOK_URL / bot belum diisi di .env", None
     if not url.startswith("https://discord.com/api/webhooks/"):
         return False, "URL bukan webhook Discord yang valid", None
 
