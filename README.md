@@ -295,9 +295,21 @@ mentah: kirim IDENTIFY dengan intents `1` (GUILDS saja, tidak butuh intent
 istimewa), balas heartbeat, lalu tangani `INTERACTION_CREATE`. Tidak ada
 dependency baru selain `websockets`.
 
-**Bot ini harus hidup selama command mau dipakai.** Tutup jendela = `/cari`
-berhenti menjawab. Kalau mau otomatis hidup, daftarkan `bot.cmd` di Task
-Scheduler dengan trigger `AtLogOn`.
+**Bot ini harus hidup selama command mau dipakai.** Ada tiga perintah pengelola:
+
+```powershell
+python -m jobhunter bot --start    # jalankan di background (jendela boleh ditutup)
+python -m jobhunter bot --status   # cek hidup, dari heartbeat file
+python -m jobhunter bot --stop     # berhenti dengan rapi
+```
+
+Liveness-nya dibaca dari `data/bot.heartbeat` (ditulis tiap 5 detik), bukan dari
+pid: proses yang dijalankan terpisah sering tidak bisa diperiksa lewat `os.kill`.
+Ambangnya 20 detik. Berhenti pun lewat file `data/bot.stop` yang dipantau bot
+tiap 2 detik, karena mengirim sinyal ke proses detached bisa ditolak.
+
+Untuk hidup otomatis setelah reboot, daftarkan `bot.cmd` di Task Scheduler
+dengan trigger `AtLogOn`.
 
 ## Reaksi jadi status lamaran
 

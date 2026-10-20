@@ -1,4 +1,4 @@
-"""Minimal Discord gateway bot that answers slash commands.
+﻿"""Minimal Discord gateway bot that answers slash commands.
 
 Only depends on `websockets`, which is already installed. Handles:
   - /cari kata:<kata> [hari:<n>] [remote:<true|false>]
@@ -13,6 +13,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
+import signal
+import subprocess
 import sys
 import time
 
@@ -178,12 +181,12 @@ def handle_reaction(event_type: str, data: dict) -> None:
 
 def _embed(row: dict) -> dict:
     posted = _epoch(row.get("posted_at"))
-    lines = [f"**{row['company']}**", f"📍 {row['location'] or 'lokasi tidak disebut'}"]
+    lines = [f"**{row['company']}**", f"ðŸ“ {row['location'] or 'lokasi tidak disebut'}"]
     if posted:
-        lines.append(f"🕒 <t:{posted}:R>")
+        lines.append(f"ðŸ•’ <t:{posted}:R>")
     fields = []
     if row.get("salary"):
-        fields.append({"name": "💰 Gaji", "value": str(row["salary"])[:150], "inline": True})
+        fields.append({"name": "ðŸ’° Gaji", "value": str(row["salary"])[:150], "inline": True})
     if row.get("fit") is not None:
         fields.append({"name": "Fit", "value": str(row["fit"]), "inline": True})
     return {
@@ -236,6 +239,7 @@ async def run() -> int:
         return 1
 
     backoff = 3
+    shutdown = {"flag": False}
     while True:
         try:
             async with websockets.connect(GATEWAY_URL, max_size=2**24) as ws:
@@ -246,10 +250,36 @@ async def run() -> int:
 
                 async def heartbeat() -> None:
                     while not stop.is_set():
+                        try:
+                            HB_PATH.write_text(str(int(time.time())), encoding="utf-8")
+                        except OSError:
+                            pass
+                        await asyncio.sleep(min(interval, 5))
+
+                async def watch_stop() -> None:
+                    """Graceful shutdown via file: signalling a detached pid is unreliable."""
+                    while not stop.is_set():
+                        if STOP_PATH.exists():
+                            with contextlib.suppress(OSError):
+                                STOP_PATH.unlink()
+                            shutdown["flag"] = True
+                            print("stop diminta, menutup koneksi...")
+                            await ws.close()
+                            return
+                        await asyncio.sleep(2)
+
+                async def gateway_beat() -> None:
+                    while not stop.is_set():
                         await asyncio.sleep(interval)
                         await ws.send(json.dumps({"op": 1, "d": state["seq"]}))
 
-                beat = asyncio.create_task(heartbeat())
+                beat = asyncio.create_task(gateway_beat())
+                hb = asyncio.create_task(heartbeat())
+                watcher = asyncio.create_task(watch_stop())
+                try:
+                    HB_PATH.write_text(str(int(time.time())), encoding="utf-8")
+                except OSError:
+                    pass
 
                 await ws.send(
                     json.dumps(
@@ -288,8 +318,11 @@ async def run() -> int:
                 finally:
                     stop.set()
                     beat.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await beat
+                    hb.cancel()
+                    watcher.cancel()
+                    for task in (beat, hb, watcher):
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await task
         except KeyboardInterrupt:
             print("berhenti")
             return 0
@@ -299,12 +332,124 @@ async def run() -> int:
             backoff = min(backoff * 2, 30)
             continue
         backoff = 3
+        if shutdown["flag"]:
+            HB_PATH.unlink(missing_ok=True)
+            print("bot berhenti")
+            return 0
+
+
+FRESH = 20  # heartbeat tiap 5s; 20s berarti proses sudah mati
+PID_PATH = config.DATA_DIR / "bot.pid"
+HB_PATH = config.DATA_DIR / "bot.heartbeat"
+STOP_PATH = config.DATA_DIR / "bot.stop"
+LOG_PATH = config.DATA_DIR / "logs" / "bot.out.log"
+ERR_PATH = config.DATA_DIR / "logs" / "bot.err.log"
+
+
+def _beat_age() -> int | None:
+    """Seconds since the last heartbeat, or None when it never ran."""
+    try:
+        beat = int(HB_PATH.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+    return int(time.time()) - beat
+
+
+def _read_pid() -> int | None:
+    try:
+        return int(PID_PATH.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+
+
+def start() -> int:
+    """Spawn the bot detached, so it survives the terminal that started it."""
+    age = _beat_age()
+    if age is not None and age < FRESH:
+        print(f"bot sudah jalan (heartbeat {age}s lalu, pid {_read_pid()})")
+        return 0
+
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    STOP_PATH.unlink(missing_ok=True)
+    flags = 0
+    if os.name == "nt":
+        flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+
+    with open(LOG_PATH, "ab") as out, open(ERR_PATH, "ab") as err:
+        proc = subprocess.Popen(
+            [sys.executable, "-u", "-m", "jobhunter", "bot", "--run"],
+            cwd=str(config.ROOT),
+            stdout=out,
+            stderr=err,
+            stdin=subprocess.DEVNULL,
+            creationflags=flags,
+            close_fds=True,
+        )
+    PID_PATH.write_text(str(proc.pid), encoding="utf-8")
+    print(f"bot dijalankan (pid {proc.pid}) · log: {LOG_PATH}")
+    return 0
+
+
+def stop() -> int:
+    """Ask the running bot to exit via a stop file.
+
+    Signalling the pid is unreliable here: when the bot was started detached,
+    os.kill may lack access. The heartbeat loop watches this file instead.
+    """
+    age = _beat_age()
+    if age is None or age >= FRESH:
+        PID_PATH.unlink(missing_ok=True)
+        print("bot tidak berjalan")
+        return 0
+
+    STOP_PATH.write_text(str(int(time.time())), encoding="utf-8")
+    for _ in range(20):
+        time.sleep(1)
+        age = _beat_age()
+        if age is None or age > FRESH:
+            PID_PATH.unlink(missing_ok=True)
+            print("bot dihentikan")
+            return 0
+    print("bot belum berhenti setelah 20s; cek data/logs/bot.out.log")
+    return 1
+
+
+def status() -> int:
+    """Liveness comes from the heartbeat file: sandboxed pid checks are unreliable."""
+    beat = 0
+    try:
+        beat = int(HB_PATH.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        beat = 0
+    age = int(time.time()) - beat if beat else None
+
+    if age is not None and age < FRESH:
+        print(f"status: jalan (heartbeat {age}s lalu)")
+    else:
+        pid = _read_pid()
+        detail = f", pid {pid}" if pid else ""
+        print(f"status: mati (heartbeat {'belum pernah' if age is None else str(age) + 's lalu'}{detail})")
+        return 1
+
+    try:
+        tail = LOG_PATH.read_text(encoding="utf-8", errors="replace").strip().splitlines()[-3:]
+        for line in tail:
+            print("  ", line)
+    except OSError:
+        pass
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = argv or []
     if "--register" in argv:
         return register()
+    if "--start" in argv:
+        return start()
+    if "--stop" in argv:
+        return stop()
+    if "--status" in argv:
+        return status()
     try:
         return asyncio.run(run())
     except KeyboardInterrupt:
@@ -313,3 +458,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
+

@@ -400,7 +400,11 @@ def cmd_discord(args) -> int:
 
 
 def cmd_bot(args) -> int:
-    return gateway_bot.main(["--register"] if args.register else [])
+    flags = []
+    for name in ("register", "start", "stop", "status", "run"):
+        if getattr(args, name, False):
+            flags.append("--" + name)
+    return gateway_bot.main(flags)
 
 
 def cmd_sync(args) -> int:
@@ -608,6 +612,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("bot", help="run the slash-command bot (needs to stay online)")
     p.add_argument("--register", action="store_true", help="publish /cari to the guild, then exit")
+    p.add_argument("--start", action="store_true", help="start in the background and return")
+    p.add_argument("--stop", action="store_true", help="stop the background bot")
+    p.add_argument("--status", action="store_true", help="show whether the background bot is alive")
+    p.add_argument("--run", action="store_true", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_bot)
 
     p = sub.add_parser("clean", help="delete stored postings that violate current filters")

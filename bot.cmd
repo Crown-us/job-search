@@ -1,12 +1,21 @@
 @echo off
-REM Jalankan bot slash-command. Biarkan jendela ini terbuka selama mau dipakai.
-REM Tutup jendela = bot mati = /cari berhenti menjawab.
+REM Start bot di background (tanpa jendela menganggur).
+REM Tutup jendela ini tidak mematikan bot.
 cd /d "%~dp0"
 
 echo Mendaftarkan /cari (aman diulang)...
-python -u -m jobhunter bot --register
+python -m jobhunter bot --register
 
 echo.
-echo Bot jalan. Tekan Ctrl+C untuk berhenti.
-python -u -m jobhunter bot
+echo Menjalankan bot...
+python -m jobhunter bot --start
+
+timeout /t 5 >nul
+echo.
+python -m jobhunter bot --status
+
+echo.
+echo Perintah lain:
+echo   python -m jobhunter bot --stop     hentikan
+echo   python -m jobhunter bot --status   cek hidup
 pause
