@@ -323,6 +323,19 @@ def cmd_discord(args) -> int:
     params.append(1000 if wanted_tracks else args.limit)
     rows = [dict(r) for r in conn.execute(sql, params)]
 
+    if args.max_age_days:
+        # Freshness gate: a public feed should not showcase month-old postings.
+        from .discord_notify import _epoch
+
+        cutoff = time.time() - args.max_age_days * 86400
+        fresh = []
+        for row in rows:
+            posted = _epoch(row.get("posted_at"))
+            if posted is None or posted >= cutoff:
+                fresh.append(row)
+        console.print(f"[dim]umur <= {args.max_age_days} hari: {len(fresh)} dari {len(rows)}[/]")
+        rows = fresh
+
     if wanted_tracks:
         tracks = config.profile().get("tracks") or {}
         keep = []
@@ -576,6 +589,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--remote", action="store_true", help="only postings flagged remote")
     p.add_argument("--feeds-only", action="store_true", help="only postings from the remote feeds")
     p.add_argument("--exclude-feeds", action="store_true", help="skip remote feeds (they have their own channel)")
+    p.add_argument("--max-age-days", type=int, default=0, help="skip postings older than N days (0 = no limit)")
     p.add_argument("--per-job", action="store_true", help="one message per job, so reactions map 1:1")
     p.add_argument("--thread", action="store_true", help="post inside a new thread named for today")
     p.add_argument("--attach-letters", action="store_true", help="attach generated cover letters")

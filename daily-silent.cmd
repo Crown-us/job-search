@@ -19,9 +19,9 @@ python -m jobhunter enrich --limit 30 --min-score 60 >> "%LOG%" 2>&1
 python -m jobhunter analyze --limit 15 --min-score 75 >> "%LOG%" 2>&1
 python -m jobhunter digest --limit 12 --min-fit 60 >> "%LOG%" 2>&1
 python -m jobhunter toast --min-fit 75 >> "%LOG%" 2>&1
-python -m jobhunter discord --per-job --public --only-new --exclude-feeds --limit 3 --min-fit 70 --tracks fullstack,it_support,ai_junior,admin_data --channel %DEV_CHANNEL% >> "%LOG%" 2>&1
-python -m jobhunter discord --per-job --public --only-new --exclude-feeds --limit 2 --min-fit 75 --tracks marketing,video_editor,graphic_design,social_media --channel %KREATIF_CHANNEL% >> "%LOG%" 2>&1
-python -m jobhunter discord --per-job --public --only-new --feeds-only --limit 3 --min-fit 60 --tracks fullstack,it_support,ai_junior,marketing,video_editor,graphic_design,social_media --channel %REMOTE_CHANNEL% >> "%LOG%" 2>&1
+python -m jobhunter discord --per-job --public --only-new --exclude-feeds --max-age-days 30 --limit 3 --min-fit 70 --tracks fullstack,it_support,ai_junior,admin_data --channel %DEV_CHANNEL% >> "%LOG%" 2>&1
+python -m jobhunter discord --per-job --public --only-new --exclude-feeds --max-age-days 30 --limit 2 --min-fit 75 --tracks marketing,video_editor,graphic_design,social_media --channel %KREATIF_CHANNEL% >> "%LOG%" 2>&1
+python -m jobhunter discord --per-job --public --only-new --feeds-only --max-age-days 45 --limit 3 --min-fit 60 --tracks fullstack,it_support,ai_junior,marketing,video_editor,graphic_design,social_media --channel %REMOTE_CHANNEL% >> "%LOG%" 2>&1
 python -m jobhunter sync >> "%LOG%" 2>&1
 
 echo ==== selesai %date% %time% ==== >> "%LOG%"

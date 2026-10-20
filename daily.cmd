@@ -23,13 +23,13 @@ echo [5/9] notifikasi desktop...
 python -m jobhunter toast --min-fit 75
 
 echo [6/9] feed publik: dev-it...
-python -m jobhunter discord --per-job --public --only-new --exclude-feeds --limit 3 --min-fit 70 --tracks fullstack,it_support,ai_junior,admin_data --channel %DEV_CHANNEL%
+python -m jobhunter discord --per-job --public --only-new --exclude-feeds --max-age-days 30 --limit 3 --min-fit 70 --tracks fullstack,it_support,ai_junior,admin_data --channel %DEV_CHANNEL%
 
 echo [7/9] feed publik: kreatif...
-python -m jobhunter discord --per-job --public --only-new --exclude-feeds --limit 2 --min-fit 75 --tracks marketing,video_editor,graphic_design,social_media --channel %KREATIF_CHANNEL%
+python -m jobhunter discord --per-job --public --only-new --exclude-feeds --max-age-days 30 --limit 2 --min-fit 75 --tracks marketing,video_editor,graphic_design,social_media --channel %KREATIF_CHANNEL%
 
 echo [8/9] feed publik: remote...
-python -m jobhunter discord --per-job --public --only-new --feeds-only --limit 3 --min-fit 60 --tracks fullstack,it_support,ai_junior,marketing,video_editor,graphic_design,social_media --channel %REMOTE_CHANNEL%
+python -m jobhunter discord --per-job --public --only-new --feeds-only --max-age-days 45 --limit 3 --min-fit 60 --tracks fullstack,it_support,ai_junior,marketing,video_editor,graphic_design,social_media --channel %REMOTE_CHANNEL%
 
 echo [9/9] baca reaksi Discord...
 python -m jobhunter sync

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -21,6 +21,33 @@ from . import config
 
 COLOURS = {"good": 0x2F9E5F, "mid": 0xC8922A, "low": 0xB44D4D}
 MAX_EMBEDS = 10
+
+SOURCE_LABEL = {
+    "jobstreet": "JobStreet",
+    "kalibrr": "Kalibrr",
+    "greenhouse": "Greenhouse",
+    "ashby": "Ashby",
+    "lever": "Lever",
+    "workable": "Workable",
+    "remoteok": "RemoteOK",
+    "remotive": "Remotive",
+    "jobicy": "Jobicy",
+    "himalayas": "Himalayas",
+    "arbeitnow": "Arbeitnow",
+    "hackernews": "Hacker News",
+}
+
+# Emoji + colour per career track, so a glance is enough to tell the feed apart.
+TRACK_STYLE = {
+    "fullstack": ("💻", 0x5865F2),
+    "it_support": ("🛠️", 0x2F9E5F),
+    "ai_junior": ("🤖", 0xEB459E),
+    "admin_data": ("🗂️", 0xFEE75C),
+    "marketing": ("📣", 0xE67E22),
+    "video_editor": ("🎬", 0x9B59B6),
+    "graphic_design": ("🎨", 0xE91E63),
+    "social_media": ("📱", 0x1ABC9C),
+}
 
 REACTION_HELP = "✅ applied · 🔖 simpan · ❌ skip · 📅 interview"
 REACTION_HELP_SYNC = REACTION_HELP + " — jalankan `jobhunter sync`"
@@ -40,51 +67,86 @@ def _bot_configured() -> bool:
     return bool((config.env().get("DISCORD_BOT_TOKEN") or "").strip())
 
 
+def _track_of(row: dict) -> str:
+    """Best-matching track name, or '' when nothing matches."""
+    from .score import _best_track
+
+    tracks = config.profile().get("tracks") or {}
+    headline = f"{row.get('title') or ''} {row.get('department') or ''}"
+    best = _best_track(headline, tracks)
+    return best[1] if best else ""
+
+
+def _epoch(value: str | None) -> int | None:
+    """Turn the various posted_at formats into a unix timestamp for Discord."""
+    if not value:
+        return None
+    text = str(value).strip()
+    if text.isdigit() and len(text) in (10, 13):
+        return int(text) // (1000 if len(text) == 13 else 1)
+    try:
+        moment = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        return int(moment.replace(tzinfo=timezone.utc).timestamp())
+    return int(moment.timestamp())
+
+
 def _embed(row: dict, public: bool = False) -> dict:
     fit = row.get("fit")
     gaps = [g for g in (row.get("gaps") or "").split("\n") if g.strip()][:2]
     strengths = [s for s in (row.get("strengths") or "").split("\n") if s.strip()][:1]
 
+    track = _track_of(row)
+    emoji, track_colour = TRACK_STYLE.get(track, ("📌", 0x95A5A6))
+    location = row.get("location") or ("Remote" if row.get("remote") else "lokasi tidak disebut")
+    company = row.get("company") or "Perusahaan tidak disebut"
+    source = str(row.get("source") or "")
+
+    lines = [f"**{company}**", f"📍 {location}"]
+    posted = _epoch(row.get("posted_at"))
+    if posted:
+        lines.append(f"🕒 diposting <t:{posted}:R>")
+
     fields = []
     if public:
-        # A community feed shows the posting, never the owner's personal gap analysis.
-        if row.get("source"):
-            fields.append({"name": "sumber", "value": str(row["source"]), "inline": True})
         if row.get("salary"):
-            fields.append({"name": "gaji", "value": str(row["salary"])[:200], "inline": True})
+            fields.append({"name": "💰 Gaji", "value": str(row["salary"])[:200], "inline": True})
+        fields.append({"name": "🏷️ Tipe", "value": "Remote" if row.get("remote") else "On-site", "inline": True})
     else:
         if fit is not None:
-            fields.append({"name": "fit", "value": str(fit), "inline": True})
+            fields.append({"name": "Fit", "value": str(fit), "inline": True})
         if row.get("score") is not None:
-            fields.append({"name": "skor", "value": str(row["score"]), "inline": True})
-        if row.get("source"):
-            fields.append({"name": "sumber", "value": str(row["source"]), "inline": True})
+            fields.append({"name": "Skor", "value": str(row["score"]), "inline": True})
+        if row.get("salary"):
+            fields.append({"name": "💰 Gaji", "value": str(row["salary"])[:200], "inline": True})
         if gaps:
-            fields.append({"name": "gap", "value": "\n".join(g[:90] for g in gaps)[:1024], "inline": False})
+            fields.append({"name": "❗ Gap", "value": "\n".join(g[:90] for g in gaps)[:1024], "inline": False})
         if strengths:
             fields.append(
-                {"name": "plus", "value": "\n".join(s[:90] for s in strengths)[:1024], "inline": False}
+                {"name": "✅ Plus", "value": "\n".join(s[:90] for s in strengths)[:1024], "inline": False}
             )
 
-    location = row.get("location") or ("Remote" if row.get("remote") else "lokasi tidak disebut")
-    return {
-        "title": (row.get("title") or "")[:240],
+    embed = {
+        "author": {"name": f"{SOURCE_LABEL.get(source, source or 'Job Hunter')}"},
+        "title": f"{emoji} {(row.get('title') or '')[:230]}",
         "url": row.get("url") or "",
-        "description": f"{row.get('company', '')} · {location}",
-        "color": COLOURS[_tone(fit)],
+        "description": "\n".join(lines),
+        "color": track_colour if public else COLOURS[_tone(fit)],
         "fields": fields[:6],
-        "footer": {
-            "text": f"id {str(row.get('id', ''))[:8]} · python -m jobhunter letter {str(row.get('id', ''))[:8]}"
-        },
+        "footer": {"text": f"Job Hunter · {track or 'lainnya'} · id {str(row.get('id', ''))[:8]}"},
     }
+    return embed
 
 
 def build_single(row: dict, public: bool = False) -> dict:
     """One job per message, so a reaction on it means that job and only that job."""
     fit = row.get("fit")
     location = row.get("location") or ("Remote" if row.get("remote") else "lokasi tidak disebut")
+    source = SOURCE_LABEL.get(str(row.get("source") or ""), "Job Hunter")
     if public:
-        header = location
+        header = f"🆕 **{source}** · {location}"
     elif fit is not None:
         header = f"**fit {fit}** · skor {row.get('score')} · {location}"
     else:
