@@ -17,6 +17,8 @@ API = "https://discord.com/api/v10"
 
 def main() -> int:
     token, channel_id = discord_sync.credentials()
+    if len(sys.argv) > 1:
+        channel_id = sys.argv[1]
     headers = {"Authorization": f"Bot {token}", "User-Agent": "jobhunter/0.1"}
     messages = discord_sync.fetch_messages(channel_id, token, limit=3)
     if not messages:
