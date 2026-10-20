@@ -1,0 +1,30 @@
+# Role picker: satu emoji = satu role.
+# Angka colour itu hex tanpa 0x.
+channel: pilih-bidang
+
+title: "Pilih bidangmu"
+description: |
+  Klik emoji di bawah untuk dapat role. Klik lagi untuk melepas.
+
+  Role dipakai supaya kamu cuma di-ping untuk lowongan yang relevan —
+  bukan semua lowongan yang masuk.
+
+roles:
+  - emoji: "💻"
+    name: "Developer"
+    color: "5865F2"
+  - emoji: "🛠️"
+    name: "IT Support"
+    color: "2F9E5F"
+  - emoji: "🤖"
+    name: "AI & Automation"
+    color: "EB459E"
+  - emoji: "📣"
+    name: "Marketing"
+    color: "E67E22"
+  - emoji: "🎨"
+    name: "Desain"
+    color: "E91E63"
+  - emoji: "🎬"
+    name: "Video"
+    color: "9B59B6"

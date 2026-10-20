@@ -128,6 +128,54 @@ def search(keyword: str, days: int = 30, remote_only: bool = False, limit: int =
     return fresh[:limit]
 
 
+PICKER_PATH = config.DATA_DIR / "role_picker.json"
+
+
+def _picker() -> dict | None:
+    try:
+        return json.loads(PICKER_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _apply_role(guild_id: str, user_id: str, role_id: str, add: bool) -> int:
+    url = f"{API}/guilds/{guild_id}/members/{user_id}/roles/{role_id}"
+    call = requests.put if add else requests.delete
+    return call(url, headers=_headers(), timeout=15).status_code
+
+
+def handle_reaction(event_type: str, data: dict) -> None:
+    """Grant or revoke a picker role. Silent for anything else in the server."""
+    picker = _picker()
+    if not picker:
+        return
+    if data.get("channel_id") != picker.get("channel_id"):
+        return
+    if data.get("message_id") != picker.get("message_id"):
+        return
+
+    emoji = (data.get("emoji") or {}).get("name") or ""
+    role_id = (picker.get("roles") or {}).get(emoji)
+    if not role_id:
+        return
+
+    member = data.get("member") or {}
+    if (member.get("user") or {}).get("bot"):
+        return
+
+    user_id = data.get("user_id")
+    if not user_id:
+        return
+
+    add = event_type == "MESSAGE_REACTION_ADD"
+    code = _apply_role(picker["guild_id"], user_id, role_id, add)
+    action = "tambah" if add else "lepas"
+    safe = role_id[-4:]
+    print(f"{action} role ..{safe} untuk {user_id} -> {code}")
+    if code == 403:
+        print("  role bot harus di ATAS role target (Server Settings -> Roles)")
+
+
 def _embed(row: dict) -> dict:
     posted = _epoch(row.get("posted_at"))
     lines = [f"**{row['company']}**", f"📍 {row['location'] or 'lokasi tidak disebut'}"]
@@ -235,6 +283,8 @@ async def run() -> int:
                             payload = handle_command(interaction.get("data") or {})
                             _callback(interaction["id"], interaction["token"], payload)
                             print(f"menjawab /{interaction['data'].get('name')}")
+                        elif event.get("t") in ("MESSAGE_REACTION_ADD", "MESSAGE_REACTION_REMOVE"):
+                            handle_reaction(event["t"], event["d"])
                 finally:
                     stop.set()
                     beat.cancel()
