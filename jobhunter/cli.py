@@ -20,6 +20,7 @@ from . import discord_sync
 from . import letter as cover_letter
 from . import score as scoring
 from . import toast as windows_toast
+from . import bot as gateway_bot
 from .sources import ADAPTERS, BOARD_SOURCES, FEED_SOURCES
 
 console = Console() if sys.stdout.isatty() else Console(width=110)
@@ -398,6 +399,10 @@ def cmd_discord(args) -> int:
     return 0 if ok else 1
 
 
+def cmd_bot(args) -> int:
+    return gateway_bot.main(["--register"] if args.register else [])
+
+
 def cmd_sync(args) -> int:
     result = discord_sync.sync(limit=args.limit, dry_run=args.dry_run)
     if not result["ok"]:
@@ -600,6 +605,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=50, help="how many recent messages to scan")
     p.add_argument("--dry-run", action="store_true", help="show changes without writing")
     p.set_defaults(func=cmd_sync)
+
+    p = sub.add_parser("bot", help="run the slash-command bot (needs to stay online)")
+    p.add_argument("--register", action="store_true", help="publish /cari to the guild, then exit")
+    p.set_defaults(func=cmd_bot)
 
     p = sub.add_parser("clean", help="delete stored postings that violate current filters")
     p.add_argument("--dry-run", action="store_true", help="list them without deleting")

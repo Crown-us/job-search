@@ -274,6 +274,31 @@ pesan lowongannya masing-masing.
 python -m jobhunter discord --only-new --limit 5 --min-fit 75 --per-job --attach-letters
 ```
 
+## Slash command /cari
+
+`python -m jobhunter bot --register` menerbitkan `/cari` ke guild (langsung aktif,
+beda dengan command global yang bisa perlu satu jam). `python -m jobhunter bot`
+menjalankan bot-nya, atau klik `bot.cmd`.
+
+```
+/cari kata:laravel
+/cari kata:desain hari:60
+/cari kata:python remote:true
+```
+
+Jawabannya **ephemeral** - cuma orang yang mengetik yang melihat, channel tetap
+bersih. Hasil diurutkan dari fit/skor tertinggi, maksimal 5 kartu, dipotong
+berdasarkan umur posting (default 30 hari).
+
+Implementasinya memakai `websockets` (sudah terpasang) dan protokol gateway
+mentah: kirim IDENTIFY dengan intents `1` (GUILDS saja, tidak butuh intent
+istimewa), balas heartbeat, lalu tangani `INTERACTION_CREATE`. Tidak ada
+dependency baru selain `websockets`.
+
+**Bot ini harus hidup selama command mau dipakai.** Tutup jendela = `/cari`
+berhenti menjawab. Kalau mau otomatis hidup, daftarkan `bot.cmd` di Task
+Scheduler dengan trigger `AtLogOn`.
+
 ## Reaksi jadi status lamaran
 
 `python -m jobhunter sync` membaca reaksi di channel dan mengubah status:
