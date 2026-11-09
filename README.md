@@ -388,3 +388,33 @@ Catatan:
   `--min-fit` pada mode publik menjadi ambang skor umum (0–100); pada mode pribadi
   tetap menggunakan fit analisis atau skor pribadi jika analisis belum ada.
 - Tes lokal tanpa Discord/database asli: `python -m unittest discover -s tests -v`.
+
+## Papan loker publik (9 November 2026)
+
+`python -m jobhunter site` menulis `data/site/index.html` dan `data/site/jobs.json`:
+papan loker statis untuk umum. Isinya hanya lowongan yang menyebut nama perusahaan,
+cocok dengan salah satu track, berumur paling lama 30 hari, dan skor umumnya >= 60.
+Fit CV, gap, cover letter, status lamaran, dan catatan tidak pernah ikut ditulis
+(dijaga oleh `tests/test_site.py`).
+
+- Satu file HTML tanpa aset eksternal. Daftar dirender di server; JavaScript hanya
+  untuk filter (kata kunci, bidang, remote) dan tombol mode gelap.
+- Tanda "Baru" mengikuti tanggal posting (48 jam), bukan tanggal pertama kali ditarik,
+  supaya backlog lama tidak terlihat seperti lowongan segar.
+- Opsi: `--name`, `--min-score`, `--max-age-days`, `--out`.
+
+### Jalan harian di Linux
+
+`scripts/daily.sh` = `daily.cmd` versi Linux (tanpa toast Windows, plus `site`).
+`SKIP_DISCORD=1 scripts/daily.sh` menjalankan semuanya tanpa memposting ke Discord.
+Timer systemd ada di `deploy/`, belum diaktifkan:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp deploy/jobhunter-daily.* ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now jobhunter-daily.timer   # tiap 07:00
+```
+
+Interpreter default `~/.venvs/jobhunter/bin/python` (venv di luar partisi NTFS);
+ganti lewat variabel `PY`.

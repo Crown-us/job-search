@@ -8,6 +8,7 @@ import re
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
@@ -267,6 +268,16 @@ def cmd_digest(args) -> int:
             f"Lowongan buat Kevin - {path.stem.replace('digest-', '')}",
         )
         console.print(f"[bold]email[/] {status}")
+    return 0
+
+
+def cmd_site(args) -> int:
+    from . import site
+
+    out = Path(args.out) if args.out else None
+    path, count = site.build(out, name=args.name, min_score=args.min_score, max_age_days=args.max_age_days)
+    console.print(f"[bold]site[/] {count} lowongan -> {path}")
+    console.print(f"[dim]buka di browser: {path.resolve().as_uri()}[/]")
     return 0
 
 
@@ -589,6 +600,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--open", action="store_true", help="open it in the default browser")
     p.add_argument("--email", action="store_true", help="also send it through SMTP")
     p.set_defaults(func=cmd_digest)
+
+    p = sub.add_parser("site", help="build the public job board (index.html + jobs.json)")
+    p.add_argument("--out", default="", help="output folder, default data/site")
+    p.add_argument("--name", default="Job Hunter", help="board name shown in the masthead")
+    p.add_argument("--min-score", type=int, default=60, help="public score floor (0-100)")
+    p.add_argument("--max-age-days", type=int, default=30)
+    p.set_defaults(func=cmd_site)
 
     p = sub.add_parser("toast", help="pop a Windows notification with today's top picks")
     p.add_argument("--min-fit", type=int, default=75)

@@ -1,0 +1,9 @@
+[Unit]
+Description=Job Hunter daily pipeline
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/D/Job Hunter
+ExecStart="%h/D/Job Hunter/scripts/daily.sh"
