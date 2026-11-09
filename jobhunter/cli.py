@@ -603,7 +603,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("site", help="build the public job board (index.html + jobs.json)")
     p.add_argument("--out", default="", help="output folder, default data/site")
-    p.add_argument("--name", default="Job Hunter", help="board name shown in the masthead")
+    p.add_argument("--name", default="Maniak Kerja", help="board name shown in the masthead")
     p.add_argument("--min-score", type=int, default=60, help="public score floor (0-100)")
     p.add_argument("--max-age-days", type=int, default=30)
     p.set_defaults(func=cmd_site)
