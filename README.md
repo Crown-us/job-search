@@ -366,3 +366,25 @@ Catatan:
 - Tidak menyentuh LinkedIn (ToS + cepat kena restrict).
 - Tidak auto-submit lamaran.
 - Tanpa API key pun tetap jalan.
+
+
+## Tracking pengguna dan feed publik (21 Oktober 2026)
+
+- Reaksi Discord disimpan di `user_job_status`, dengan kunci `(user_id, job_id)`.
+  Status CLI di `jobs.status` tetap milik pemilik database. Status lama tidak
+  dipindahkan ke pengguna tertentu karena identitas pemberinya tidak diketahui.
+- Jalankan `python -m jobhunter sync` untuk membaca reaksi pengguna. Bot diabaikan.
+  Hanya pesan per-job yang tercatat di `deliveries` dipakai; pengambilan pengguna
+  dipaginasi. Jika permintaan API gagal, seluruh perubahan run dibatalkan.
+- Jika satu pengguna memberi beberapa reaksi, prioritasnya:
+  offer > interview > skipped > applied > shortlist. Hapus reaksi lama untuk
+  menurunkan status. Menghapus semua reaksi mempertahankan status terakhir.
+- `/cari` menyembunyikan lowongan yang sudah ditindaklanjuti oleh pengguna yang
+  bertanya; tindakan anggota lain tidak memengaruhi hasilnya. Fit CV pemilik
+  tidak ditampilkan. Restart proses bot agar kode baru digunakan.
+- `discord --public` memakai skor umum dari bidang, lokasi, level pengalaman,
+  remote, dan informasi gaji. Daftar bidang masih berbagi `profile.yaml:tracks`,
+  tetapi fit analisis, avoid_keywords pribadi, dan status CLI tidak dipakai.
+  `--min-fit` pada mode publik menjadi ambang skor umum (0–100); pada mode pribadi
+  tetap menggunakan fit analisis atau skor pribadi jika analisis belum ada.
+- Tes lokal tanpa Discord/database asli: `python -m unittest discover -s tests -v`.

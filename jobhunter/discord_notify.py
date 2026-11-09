@@ -140,8 +140,20 @@ def _embed(row: dict, public: bool = False) -> dict:
     return embed
 
 
-def build_single(row: dict, public: bool = False) -> dict:
+def build_single(row: dict, public: bool = False, mentions: str = "") -> dict:
     """One job per message, so a reaction on it means that job and only that job."""
+    if public and not mentions:
+        track = _track_of(row)
+        emoji = TRACK_STYLE.get(track, ("", 0))[0]
+        if track == "social_media":
+            emoji = "📣"
+        try:
+            picker = json.loads((config.DATA_DIR / "role_picker.json").read_text(encoding="utf-8"))
+            role_id = str((picker.get("roles") or {}).get(emoji) or "")
+            if role_id.isdigit():
+                mentions = f"<@&{role_id}>"
+        except (OSError, ValueError):
+            pass
     fit = row.get("fit")
     location = row.get("location") or ("Remote" if row.get("remote") else "lokasi tidak disebut")
     source = SOURCE_LABEL.get(str(row.get("source") or ""), "Job Hunter")
@@ -153,11 +165,12 @@ def build_single(row: dict, public: bool = False) -> dict:
         header = f"**skor {row.get('score')}** · {location}"
     if _bot_configured():
         header += "\n" + REACTION_HELP
+    content = f"{mentions}\n{header}" if mentions else header
     return {
         "username": "Job Hunter",
-        "content": header,
+        "content": content,
         "embeds": [_embed(row, public)],
-        "allowed_mentions": {"parse": []},
+        "allowed_mentions": {"parse": ["roles"] if mentions else []},
     }
 
 

@@ -141,6 +141,11 @@ def score_one(job: dict, profile: dict) -> tuple[int, list[str]]:
     return max(0, min(100, score)), reasons
 
 
+def public_score(job: dict) -> int:
+    """Rank by shared tracks, geography and entry level, never personal CV fit."""
+    return score_one(job, {"tracks": config.profile().get("tracks") or {}})[0]
+
+
 def score_jobs(rescore: bool = False, limit: int = 0) -> int:
     profile = config.profile()
     conn = db.connect()

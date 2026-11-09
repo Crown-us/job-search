@@ -296,16 +296,22 @@ def cmd_toast(args) -> int:
 
 def cmd_discord(args) -> int:
     conn = db.connect()
-    channel_key = args.channel or "discord"
+    default_channel = (config.env().get("DISCORD_CHANNEL_ID") or "").strip()
+    channel_key = args.channel or default_channel or "discord"
     sql = """
         SELECT j.*, a.fit, a.verdict, a.gaps, a.strengths
         FROM jobs j LEFT JOIN analyses a ON a.job_id = j.id
-        WHERE j.status IN ('new', 'shortlist') AND COALESCE(a.fit, j.score, 0) >= ?
+        WHERE 1=1
     """
-    params: list = [args.min_fit]
+    params: list = []
+    if not args.public:
+        sql += " AND j.status IN ('new', 'shortlist') AND COALESCE(a.fit, j.score, 0) >= ?"
+        params.append(args.min_fit)
     if args.only_new:
         sql += " AND j.id NOT IN (SELECT job_id FROM deliveries WHERE channel = ?)"
         params.append(channel_key)
+        if channel_key == default_channel:
+            sql += " AND j.id NOT IN (SELECT job_id FROM deliveries WHERE channel = 'discord')"
     if args.remote:
         sql += " AND j.remote = 1"
     if args.feeds_only:
@@ -316,13 +322,15 @@ def cmd_discord(args) -> int:
         marks = ",".join("?" * len(FEED_SOURCES))
         sql += f" AND j.source NOT IN ({marks})"
         params.extend(sorted(FEED_SOURCES))
-    sql += " ORDER BY (a.fit IS NOT NULL) DESC, COALESCE(a.fit, j.score, 0) DESC, j.score DESC LIMIT ?"
+    sql += " ORDER BY j.first_seen DESC" if args.public else " ORDER BY COALESCE(a.fit, j.score, 0) DESC"
 
     wanted_tracks = {t.strip() for t in (args.tracks or "").split(",") if t.strip()}
     if args.track:
         wanted_tracks.add(args.track)
-    params.append(1000 if wanted_tracks else args.limit)
     rows = [dict(r) for r in conn.execute(sql, params)]
+    if args.public:
+        rows = sorted(rows, key=scoring.public_score, reverse=True)
+        rows = [row for row in rows if scoring.public_score(row) >= args.min_fit]
 
     if args.max_age_days:
         # Freshness gate: a public feed should not showcase month-old postings.
@@ -348,6 +356,7 @@ def cmd_discord(args) -> int:
         rows = keep[: args.limit]
         console.print(f"[dim]{','.join(sorted(wanted_tracks))}: {len(rows)} lowongan[/]")
 
+    rows = rows[:args.limit]
     payload = discord.build_payload(rows, args.min_fit, public=args.public)
     thread_name = f"Lowongan {datetime.now():%d %b}" if args.thread else None
     attachments = discord.letter_files(rows, limit=5) if args.attach_letters else []
@@ -414,8 +423,8 @@ def cmd_sync(args) -> int:
         return 1
     if not result["changed"]:
         console.print("[dim]tidak ada reaksi yang mengubah status[/]")
-    for job_id, title, status in result["changed"]:
-        console.print(f"  [green]{status:<10}[/] {_short(title, 48)} [dim]({job_id[:8]})[/]")
+    for user_id, job_id, title, status in result["changed"]:
+        console.print(f"  [green]{status:<10}[/] {_short(title, 48)} [dim]({job_id[:8]}, user {user_id})[/]")
     console.print(f"[dim]memindai {result['scanned']} pesan | {discord_sync.legend()}[/]")
     return 0
 

@@ -108,27 +108,29 @@ def _epoch(value: str | None) -> int | None:
         return None
 
 
-def search(keyword: str, days: int = 30, remote_only: bool = False, limit: int = 5) -> list[dict]:
+def search(keyword: str, days: int = 30, remote_only: bool = False, limit: int = 5, user_id: str = "") -> list[dict]:
     conn = db.connect()
     sql = """
         SELECT j.id, j.title, j.company, j.location, j.url, j.salary, j.remote,
-               j.posted_at, j.source, a.fit
-        FROM jobs j LEFT JOIN analyses a ON a.job_id = j.id
-        WHERE j.status IN ('new', 'shortlist')
-          AND (j.title LIKE ? OR j.company LIKE ? OR j.department LIKE ?)
+               j.posted_at, j.source, j.department, j.description
+        FROM jobs j
+        WHERE (j.title LIKE ? OR j.company LIKE ? OR j.department LIKE ?)
     """
     like = f"%{keyword}%"
     params: list = [like, like, like]
+    if user_id:
+        sql += " AND NOT EXISTS (SELECT 1 FROM user_job_status u WHERE u.job_id=j.id AND u.user_id=? AND u.status NOT IN ('new','shortlist'))"
+        params.append(user_id)
     if remote_only:
         sql += " AND j.remote = 1"
-    sql += " ORDER BY COALESCE(a.fit, j.score, 0) DESC, j.first_seen DESC LIMIT ?"
-    params.append(limit * 4)
+    sql += " ORDER BY j.first_seen DESC"
     rows = [dict(r) for r in conn.execute(sql, params)]
     conn.close()
 
     cutoff = time.time() - days * 86400
     fresh = [r for r in rows if (_epoch(r["posted_at"]) or 0) >= cutoff or _epoch(r["posted_at"]) is None]
-    return fresh[:limit]
+    from .score import public_score
+    return sorted(fresh, key=public_score, reverse=True)[:limit]
 
 
 PICKER_PATH = config.DATA_DIR / "role_picker.json"
@@ -187,8 +189,6 @@ def _embed(row: dict) -> dict:
     fields = []
     if row.get("salary"):
         fields.append({"name": "ðŸ’° Gaji", "value": str(row["salary"])[:150], "inline": True})
-    if row.get("fit") is not None:
-        fields.append({"name": "Fit", "value": str(row["fit"]), "inline": True})
     return {
         "title": (row["title"] or "")[:230],
         "url": row.get("url") or "",
@@ -198,7 +198,7 @@ def _embed(row: dict) -> dict:
     }
 
 
-def handle_command(data: dict) -> dict:
+def handle_command(data: dict, user_id: str = "") -> dict:
     options = {o["name"]: o.get("value") for o in data.get("options") or []}
     keyword = str(options.get("kata") or "").strip()
     days = int(options.get("hari") or 30)
@@ -207,7 +207,7 @@ def handle_command(data: dict) -> dict:
     if len(keyword) < 2:
         return {"content": "Kata kunci minimal 2 huruf.", "flags": 64}
 
-    rows = search(keyword, days=days, remote_only=remote_only)
+    rows = search(keyword, days=days, remote_only=remote_only, user_id=user_id)
     if not rows:
         return {
             "content": f"Tidak ada lowongan yang cocok dengan **{keyword}** dalam {days} hari terakhir.",
@@ -287,7 +287,7 @@ async def run() -> int:
                             "op": 2,
                             "d": {
                                 "token": token,
-                                "intents": 1,  # GUILDS only; interactions need no privileged intent
+                                "intents": 1 | (1 << 10),  # GUILDS + GUILD_MESSAGE_REACTIONS (role picker)
                                 "properties": {"os": "windows", "browser": "jobhunter", "device": "jobhunter"},
                             },
                         }
@@ -310,7 +310,8 @@ async def run() -> int:
                             interaction = event["d"]
                             if interaction.get("type") != 2:
                                 continue
-                            payload = handle_command(interaction.get("data") or {})
+                            user = (interaction.get("member") or {}).get("user") or interaction.get("user") or {}
+                            payload = handle_command(interaction.get("data") or {}, user_id=str(user.get("id") or ""))
                             _callback(interaction["id"], interaction["token"], payload)
                             print(f"menjawab /{interaction['data'].get('name')}")
                         elif event.get("t") in ("MESSAGE_REACTION_ADD", "MESSAGE_REACTION_REMOVE"):

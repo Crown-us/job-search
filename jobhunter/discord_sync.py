@@ -1,11 +1,7 @@
-"""Read emoji reactions on the Discord shortlist and update job status.
+"""Poll reactions and save application status per Discord user.
 
-Uses only the REST API with a bot token — no gateway, no discord.py, no
-long-running process. One GET returns recent channel messages, and each message
-already carries a `reactions` array with counts, so no per-emoji requests.
-
-Polling this every few minutes (or on demand) is enough: reactions are not
-real-time critical.
+Read reactor identities with pagination; never mutate the owner's CLI status.
+Only messages recorded as one-job deliveries are eligible for tracking.
 """
 
 from __future__ import annotations
@@ -80,75 +76,82 @@ def reactions_of(message: dict) -> list[str]:
     return names
 
 
+def fetch_reactors(channel_id: str, message_id: str, emoji: str, token: str) -> list[dict]:
+    """Read every reactor, including messages with more than 100 reactions."""
+    from urllib.parse import quote
+
+    users = []
+    after = None
+    while True:
+        params = {"limit": 100}
+        if after:
+            params["after"] = after
+        resp = requests.get(
+            f"{API}/channels/{channel_id}/messages/{message_id}/reactions/{quote(emoji, safe='')}",
+            headers=_headers(token), params=params, timeout=25,
+        )
+        resp.raise_for_status()
+        batch = resp.json()
+        users.extend(u for u in batch if not u.get("bot"))
+        if len(batch) < 100:
+            return users
+        after = batch[-1]["id"]
+
+
 def sync(limit: int = 50, dry_run: bool = False) -> dict:
     token, channel_id = credentials()
     if not token or not channel_id:
-        return {
-            "ok": False,
-            "error": "DISCORD_BOT_TOKEN / DISCORD_CHANNEL_ID belum diisi di .env",
-            "changed": [],
-        }
+        return {"ok": False, "error": "DISCORD_BOT_TOKEN / DISCORD_CHANNEL_ID belum diisi di .env", "changed": []}
 
     conn = db.connect()
-    by_url = {
-        row["url"]: dict(row)
-        for row in conn.execute("SELECT id, url, title, status FROM jobs")
-    }
-    by_id = {
-        row["id"]: dict(row)
-        for row in conn.execute("SELECT id, url, title, status FROM jobs")
-    }
-
-    changed: list[tuple[str, str, str]] = []
-    seen: set[str] = set()
+    changed = []
     scanned = 0
-
-    for target in channel_ids():
-        try:
-            messages = fetch_messages(target, token, limit)
-        except (PermissionError, LookupError) as exc:
-            conn.close()
-            return {"ok": False, "error": str(exc), "changed": changed}
-        except requests.RequestException as exc:
-            conn.close()
-            return {"ok": False, "error": f"koneksi gagal: {type(exc).__name__}", "changed": changed}
-        scanned += len(messages)
-
-        # Authoritative mapping: the message id captured when the digest was posted.
-        # Works even without the Message Content intent, which blanks embeds on read.
-        message_to_job = db.delivery_by_message(conn, target)
-
-        for message in messages:
-            emojis = reactions_of(message)
-            if not emojis:
-                continue
-
-            candidates: list[dict] = []
-            mapped = message_to_job.get(str(message.get("id")))
-            if mapped and mapped in by_id:
-                candidates.append(by_id[mapped])
-            for embed in message.get("embeds") or []:
-                job = by_url.get(embed.get("url") or "")
-                if job and job not in candidates:
-                    candidates.append(job)
-
-            for job in candidates:
-                if job["id"] in seen:
+    # Multiple reactions have a stable precedence; REST does not give their time.
+    priority = {"shortlist": 1, "applied": 2, "skipped": 3, "interview": 4, "offer": 5}
+    pending = {}
+    try:
+        jobs = {r["id"]: dict(r) for r in conn.execute("SELECT id,title FROM jobs")}
+        for channel in channel_ids():
+            mapping = db.delivery_by_message(conn, channel)
+            if channel == channel_id:
+                mapping = {**db.delivery_by_message(conn, "discord"), **mapping}
+            messages = fetch_messages(channel, token, limit)
+            scanned += len(messages)
+            for message in messages:
+                job_id = mapping.get(str(message.get("id")))
+                if job_id not in jobs:
                     continue
-                for emoji in emojis:
+                for emoji in reactions_of(message):
                     status = EMOJI_STATUS.get(emoji)
-                    if not status or status == job["status"]:
+                    if not status:
                         continue
-                    changed.append((job["id"], job["title"], status))
-                    seen.add(job["id"])
-                    if not dry_run:
-                        conn.execute("UPDATE jobs SET status = ? WHERE id = ?", (status, job["id"]))
-                    break
-
-    if not dry_run:
-        conn.commit()
-    conn.close()
-    return {"ok": True, "error": "", "changed": changed, "scanned": scanned}
+                    for user in fetch_reactors(channel, str(message["id"]), emoji, token):
+                        if user.get("bot") or not user.get("id"):
+                            continue
+                        key = (str(user["id"]), job_id)
+                        if priority[status] > priority.get(pending.get(key), 0):
+                            pending[key] = status
+        for (user_id, job_id), status in pending.items():
+            previous = conn.execute(
+                "SELECT status FROM user_job_status WHERE user_id=? AND job_id=?", (user_id, job_id)
+            ).fetchone()
+            if previous and previous[0] == status:
+                continue
+            changed.append((user_id, job_id, jobs[job_id]["title"], status))
+            if not dry_run:
+                conn.execute(
+                    "INSERT INTO user_job_status (user_id,job_id,status,updated_at) VALUES (?,?,?,?) "
+                    "ON CONFLICT(user_id,job_id) DO UPDATE SET status=excluded.status, updated_at=excluded.updated_at",
+                    (user_id, job_id, status, db.utcnow()),
+                )
+        if not dry_run:
+            conn.commit()
+        return {"ok": True, "error": "", "changed": changed, "scanned": scanned}
+    except (requests.RequestException, PermissionError, LookupError) as exc:
+        conn.rollback()
+        return {"ok": False, "error": f"sinkronisasi gagal: {type(exc).__name__}", "changed": [], "scanned": scanned}
+    finally:
+        conn.close()
 
 
 def legend() -> str:

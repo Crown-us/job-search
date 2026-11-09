@@ -28,3 +28,22 @@ roles:
   - emoji: "🎬"
     name: "Video"
     color: "9B59B6"
+
+# Siapa yang di-ping saat lowongan masuk ke channel tertentu.
+# Nama role harus sama persis dengan yang di atas.
+channels:
+  dev-it:
+    - Developer
+    - IT Support
+    - AI & Automation
+  kreatif:
+    - Marketing
+    - Desain
+    - Video
+  remote:
+    - Developer
+    - IT Support
+    - AI & Automation
+    - Marketing
+    - Desain
+    - Video

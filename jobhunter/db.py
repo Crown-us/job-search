@@ -60,6 +60,14 @@ CREATE TABLE IF NOT EXISTS deliveries (
     sent_at  TEXT NOT NULL,
     PRIMARY KEY (job_id, channel)
 );
+
+CREATE TABLE IF NOT EXISTS user_job_status (
+    user_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, job_id)
+);
 """
 
 FIELDS = (
