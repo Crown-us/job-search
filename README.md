@@ -52,7 +52,7 @@ config/
   companies.yaml   board ATS yang dipoll (token per perusahaan)
   searches.yaml    kata kunci untuk board ID (JobStreet, Kalibrr)
   filters.yaml     hard filter: judul, senioritas, lokasi, umur posting
-  profile.yaml     profil Kevin — bahan bakar skoring
+  profile.yaml     profil pribadi (tidak di-commit; salin dari profile.example.yaml)
 data/jobs.db       SQLite: jobs + runs
 scripts/           probe API, ekstrak teks CV, purge per sumber
 jobhunter/

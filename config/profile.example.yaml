@@ -1,0 +1,133 @@
+# Contoh profil. Salin ke config/profile.yaml (tidak di-commit) lalu isi dengan
+# data CV kamu sendiri. Tanpa profile.yaml, Job Hunter memakai file ini apa adanya,
+# jadi skoring publik dan `jobhunter site` tetap jalan.
+
+nama: Nama Kamu
+headline: Full-Stack Developer (Laravel/React), fresh graduate D3
+level: fresh-graduate
+pengalaman_total_bulan: 12        # total bulan magang/kerja
+lokasi: Kota, Provinsi
+relokasi: [Surabaya, Jakarta]
+kerja: [remote, hybrid, onsite]
+
+kontak:
+  email: email@example.com
+  portfolio: https://example.com
+
+status: fresh graduate, terbuka untuk magang / kontrak / full-time
+
+pendidikan:
+  - gelar: D3 Manajemen Informatika
+    kampus: Nama Kampus
+    tahun: "2023-2026"
+
+pengalaman:
+  - posisi: Full-Stack Developer Intern
+    perusahaan: Nama Perusahaan
+    lokasi: Kota
+    periode: "2025-06 s/d 2025-08"
+    poin:
+      - aplikasi web Laravel + React
+      - REST API dan desain database
+
+proyek:
+  - nama: Nama Proyek
+    stack: Laravel, React
+    catatan: satu kalimat tentang apa yang dibangun
+
+skill:
+  bahasa: [PHP, JavaScript, TypeScript, Python, SQL]
+  framework: [Laravel, React, Next.js, Tailwind CSS]
+  database: [MySQL, PostgreSQL]
+  tools: [Git, Postman, Linux]
+
+bahasa_manusia: [Indonesia, Inggris]
+
+# Bidang yang dicari. Scorer memilih track yang paling cocok per lowongan,
+# lalu menaikkan skor sesuai kedekatannya. Papan publik juga memakai daftar ini.
+tracks:
+  fullstack:
+    label: Full-Stack / Backend / Frontend Developer
+    keywords: [laravel, php, react, javascript, typescript, fullstack, full stack, full-stack, backend, frontend, web developer, software developer, software engineer, node, next.js, rest api, flutter, programmer]
+  it_support:
+    label: IT Support / Helpdesk / Application Support
+    keywords: [it support, helpdesk, help desk, technical support, application support, desktop support, service desk, it specialist, sysadmin, technical operations, user support, troubleshooting, network]
+  ai_junior:
+    label: Junior AI / Automation / Prompt
+    keywords: [ai, artificial intelligence, llm, prompt, automation, generative, machine learning, agent, chatbot, no-code, low-code]
+  admin_data:
+    label: Administrasi / Data Entry / Operasional (fallback)
+    keywords: [administrasi, administration, data entry, data analyst, data processing, back office, operational, customer service, admin]
+  marketing:
+    label: Marketing / Digital Marketing
+    keywords: [marketing, digital marketing, growth, seo, sem, performance marketing, brand, branding, campaign, content marketing, copywriter, copywriting, email marketing, marketplace, e-commerce, ads, advertising, promotion]
+  video_editor:
+    label: Video Editor / Motion
+    keywords: [video editor, video editing, editor video, videographer, motion graphic, motion designer, animator, animation, video production, video content, after effects, premiere pro, video shooter]
+  graphic_design:
+    label: Desain Grafis / Visual
+    keywords: [graphic designer, graphic design, desain grafis, visual designer, visual design, illustrator, creative designer, artwork, print design, packaging design, photoshop, canva]
+  social_media:
+    label: Social Media / Content Creator
+    keywords: [social media, sosmed, media sosial, instagram, tiktok, content creator, konten kreator, community manager, social media specialist, social media admin, content specialist, influencer]
+
+# Kata yang menaikkan skor di semua track.
+boost_keywords:
+  - laravel
+  - php
+  - react
+  - javascript
+  - typescript
+  - python
+  - sql
+  - mysql
+  - api
+  - git
+  - linux
+  - support
+  - troubleshooting
+  - automation
+  - ai
+  - prompt
+  - junior
+  - magang
+  - internship
+  - fresh graduate
+  - entry level
+  - remote
+  # jalur non-teknis
+  - marketing
+  - seo
+  - social media
+  - konten
+  - video
+  - editing
+  - desain
+  - design
+  - photoshop
+  - illustrator
+  - canva
+  - figma
+  - after effects
+  - premiere
+  - copywriting
+  - campaign
+  - branding
+
+# Kata yang bikin lowongan ini bukan buat lo.
+avoid_keywords:
+  - 5+ years
+  - 3+ years
+  - senior
+  - lead
+  - principal
+  - phd
+  - master's degree
+  - security clearance
+  - commission
+  - ux
+  - machine learning engineer
+  - data scientist
+
+gaji:
+  harapan_idr: null

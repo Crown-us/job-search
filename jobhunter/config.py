@@ -39,7 +39,10 @@ def searches() -> dict:
 
 
 def profile() -> dict:
-    return load_yaml("profile.yaml")
+    """Personal profile, falling back to the committed example when it is absent."""
+    if (CONFIG_DIR / "profile.yaml").exists():
+        return load_yaml("profile.yaml")
+    return load_yaml("profile.example.yaml")
 
 
 def env() -> dict:
