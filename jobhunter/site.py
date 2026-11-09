@@ -160,8 +160,10 @@ header.mast { padding: 28px 0 0; }
   border: 1px solid var(--rule); border-radius: 4px; min-height: 44px; padding: 0 14px; }
 .theme:hover { border-color: var(--ink); }
 .theme:active { transform: translateY(1px); }
-form.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin: 24px 0 8px;
-  padding: 16px 0; border-bottom: 1px solid var(--rule); }
+.panel { position: sticky; top: 0; z-index: 2; background: var(--paper);
+  margin-top: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
+form.filters { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin: 0;
+  padding: 16px 0 0; }
 .field { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; color: var(--muted); }
 .field.wide { grid-column: 1 / -1; }
 .field input, .field select { font: inherit; font-size: 1rem; color: var(--ink); background: var(--field);
@@ -190,7 +192,11 @@ footer h2 { font: 700 1.15rem/1.3 var(--serif); color: var(--ink); margin: 20px 
 footer p { margin: 0 0 10px; max-width: 38rem; }
 .warn { color: var(--ink); }
 @media (max-width: 520px) {
-  form.filters { grid-template-columns: 1fr; }
+  form.filters { gap: 8px 12px; padding-top: 10px; }
+  .panel { padding-bottom: 8px; }
+}
+@media (max-height: 520px) {
+  .panel { position: static; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 """
@@ -223,6 +229,9 @@ JS = """
       ads = Array.prototype.slice.call(document.querySelectorAll('.ad')), total = ads.length;
   if (!total) return;
   form.hidden = false;
+  var panel = document.getElementById('panel');
+  function pad() { root.style.scrollPaddingTop = (getComputedStyle(panel).position === 'sticky' ? panel.offsetHeight + 8 : 0) + 'px'; }
+  pad(); addEventListener('resize', pad);
   function apply() {
     var words = q.value.toLowerCase().split(/\\s+/).filter(Boolean), shown = 0;
     ads.forEach(function (ad) {
@@ -281,6 +290,7 @@ def render(jobs: list[dict], name: str, now: datetime | None = None) -> str:
   Kalibrr, dan board karier perusahaan. Iklan tanpa nama perusahaan tidak dimuat.</p>
 </div></header>
 <main class="wrap">
+  <div class="panel" id="panel">
   <form class="filters" id="filters" role="search" hidden>
     <label class="field wide" for="q">Cari judul, perusahaan, atau kota
       <input id="q" type="search" autocomplete="off" placeholder="contoh: laravel surabaya">
@@ -291,6 +301,7 @@ def render(jobs: list[dict], name: str, now: datetime | None = None) -> str:
     <label class="check" for="remote"><input id="remote" type="checkbox"> Hanya remote</label>
   </form>
   <p class="count" id="count" aria-live="polite">{tally}</p>
+  </div>
   <div class="empty" id="empty" hidden>
     <p>Tidak ada lowongan yang cocok dengan filter ini. Coba kata kunci yang lebih pendek atau pilih semua bidang.</p>
     <button type="button" class="reset" id="reset">Hapus semua filter</button>
