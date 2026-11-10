@@ -281,6 +281,37 @@ def cmd_site(args) -> int:
     return 0
 
 
+def cmd_verify(args) -> int:
+    """Re-open each public posting's page and hide the ones the board has closed."""
+    from datetime import timedelta, timezone
+
+    from . import liveness, site
+    from .model import utcnow
+
+    now = datetime.now(timezone.utc)
+    stale = (now - timedelta(hours=args.recheck_hours)).isoformat()
+    rows = [row for row, _ in site.candidates(min_score=args.min_score, max_age_days=args.max_age_days, now=now)
+            if args.all or (row.get("checked_at") or "") < stale]
+    console.print(f"[bold]verify[/] cek {len(rows)} lowongan")
+    results = liveness.check_many(rows)
+    conn = db.connect()
+    stamp = utcnow()
+    tally = {"open": 0, "closed": 0, "unknown": 0}
+    for row, state, reason in results:
+        tally[state] += 1
+        if state == "closed":
+            conn.execute("UPDATE jobs SET closed_at=?, checked_at=? WHERE id=?", (stamp, stamp, row["id"]))
+            console.print(f"  [red]tutup[/] {row['source']:<10} {row['title'][:50]} - {row['company'][:30]} ({reason})")
+        elif state == "open":
+            conn.execute("UPDATE jobs SET checked_at=? WHERE id=?", (stamp, row["id"]))
+        elif args.verbose:
+            console.print(f"  [yellow]?[/] {row['source']:<10} {row['url']} ({reason})")
+    conn.commit()
+    conn.close()
+    console.print(f"[bold]verify[/] buka {tally['open']}, tutup {tally['closed']}, tidak pasti {tally['unknown']}")
+    return 0
+
+
 def cmd_toast(args) -> int:
     conn = db.connect()
     rows = [
@@ -312,7 +343,7 @@ def cmd_discord(args) -> int:
     sql = """
         SELECT j.*, a.fit, a.verdict, a.gaps, a.strengths
         FROM jobs j LEFT JOIN analyses a ON a.job_id = j.id
-        WHERE 1=1
+        WHERE COALESCE(j.closed_at, '') = ''
     """
     params: list = []
     if not args.public:
@@ -607,6 +638,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--min-score", type=int, default=60, help="public score floor (0-100)")
     p.add_argument("--max-age-days", type=int, default=30)
     p.set_defaults(func=cmd_site)
+
+    p = sub.add_parser("verify", help="re-check public postings and hide the closed ones")
+    p.add_argument("--min-score", type=int, default=60)
+    p.add_argument("--max-age-days", type=int, default=45, help="covers the site (30) and remote feed (45)")
+    p.add_argument("--recheck-hours", type=int, default=20, help="skip postings checked more recently")
+    p.add_argument("--all", action="store_true", help="re-check everything regardless of last check")
+    p.add_argument("-v", "--verbose", action="store_true", help="list postings that could not be checked")
+    p.set_defaults(func=cmd_verify)
 
     p = sub.add_parser("toast", help="pop a Windows notification with today's top picks")
     p.add_argument("--min-fit", type=int, default=75)

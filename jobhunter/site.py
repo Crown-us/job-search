@@ -206,15 +206,15 @@ def _day(moment: datetime) -> str:
     return f"{local.day} {MONTHS[local.month - 1][:3]} {local.year}"
 
 
-def select_jobs(min_score: int = 60, max_age_days: int = 30, now: datetime | None = None) -> list[dict]:
-    """Fresh, named, track-matched postings ranked newest first."""
+def candidates(min_score: int = 60, max_age_days: int = 30, now: datetime | None = None) -> list[tuple[dict, dict]]:
+    """(db row, public entry) for fresh, named, track-matched postings not known to be closed."""
     now = now or datetime.now(timezone.utc)
     cutoff = (now - timedelta(days=max_age_days)).timestamp()
     tracks = config.profile().get("tracks") or {}
     conn = db.connect()
     rows = [dict(r) for r in conn.execute(
         "SELECT id, source, company, title, url, location, remote, salary, department, description, "
-        "posted_at, first_seen FROM jobs"
+        "posted_at, first_seen, checked_at FROM jobs WHERE COALESCE(closed_at, '') = ''"
     )]
     conn.close()
 
@@ -237,7 +237,7 @@ def select_jobs(min_score: int = 60, max_age_days: int = 30, now: datetime | Non
         location = re.sub(r"\s+", " ", row.get("location") or "").strip()
         remote = bool(row.get("remote"))
         city, place = _place(location, remote)
-        picked.append({
+        picked.append((row, {
             "id": row["id"][:12],
             "title": _title((row.get("title") or "").strip()),
             "company": company,
@@ -252,9 +252,14 @@ def select_jobs(min_score: int = 60, max_age_days: int = 30, now: datetime | Non
             "posted": posted,
             "new": now.timestamp() - fresh_since <= NEW_HOURS * 3600,
             "excerpt": _excerpt(row.get("description") or ""),
-        })
-    picked.sort(key=lambda j: j["posted"], reverse=True)
+        }))
+    picked.sort(key=lambda pair: pair[1]["posted"], reverse=True)
     return picked
+
+
+def select_jobs(min_score: int = 60, max_age_days: int = 30, now: datetime | None = None) -> list[dict]:
+    """Public entries, newest first."""
+    return [entry for _, entry in candidates(min_score, max_age_days, now)]
 
 
 ARROW = ('<svg class="arrow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" '
@@ -292,7 +297,7 @@ def _entry(job: dict, now: datetime) -> str:
              data-pay="{int(bool(job['salary']))}" data-new="{int(job['new'])}"
              data-src="{e(job['source'], quote=True)}" data-text="{haystack}">
       <div class="job-row">
-        <h3 class="job-title"><a class="pick" href="{url}" rel="noopener nofollow">{e(job['title'])}</a></h3>
+        <h3 class="job-title"><a class="pick" href="{url}" target="_blank" rel="noopener nofollow">{e(job['title'])}</a></h3>
         <time class="ago" datetime="{posted_at.date().isoformat()}">{ago}</time>
         <p class="meta">{' · '.join(meta)}</p>
         <p class="tags">{pay}{trk}{new}</p>
@@ -306,7 +311,7 @@ def _entry(job: dict, now: datetime) -> str:
         </div>
         <dl class="facts">{dl}</dl>
         {excerpt}
-        <a class="btn primary apply" href="{url}" rel="noopener nofollow">Lamar di {e(job['source'])}{ARROW}</a>
+        <a class="btn primary apply" href="{url}" target="_blank" rel="noopener nofollow">Lamar di {e(job['source'])}{ARROW}<span class="sr">(tab baru)</span></a>
         <p class="scam">Perusahaan yang sah tidak meminta biaya untuk melamar. Ada yang minta transfer? Jangan dibayar.</p>
       </div>
     </article>"""
@@ -483,6 +488,7 @@ legend { padding: 0; margin-bottom: 6px; }
 .facts dd { margin: 0; font-size: .92rem; overflow-wrap: anywhere; }
 .desc { font-size: .92rem; color: var(--ink); margin: 6px 0 22px; }
 .apply { width: 100%; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .scam { font-size: .82rem; color: var(--muted); margin: 14px 0 0; }
 .d-empty { color: var(--muted); margin: 0; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -820,7 +826,7 @@ def render(jobs: list[dict], name: str, now: datetime | None = None) -> str:
       <li>{CHECK}Duplikat dan posting lebih dari 30 hari dibuang</li>
       <li>{CHECK}Iklan tanpa nama perusahaan (misalnya "Private Advertiser") tidak dimuat</li>
     </ul>
-    <p>Tombol Lamar membawa kamu ke halaman aslinya; lamar di sana. Terakhir diperbarui {now:%d-%m-%Y %H:%M} WIB.</p>
+    <p>Tombol Lamar membuka halaman aslinya di tab baru; lamar di sana. Terakhir diperbarui {now:%d-%m-%Y %H:%M} WIB.</p>
   </section>
   <section>
     <h2>Awas penipuan</h2>

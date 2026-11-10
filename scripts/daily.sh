@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Daily pipeline for Linux: pull -> enrich -> analyze -> public site (+ gh-pages) -> Discord feeds -> sync.
+# Daily pipeline for Linux: pull -> enrich -> analyze -> verify links -> public site (+ gh-pages) -> Discord feeds -> sync.
 # Same steps as daily.cmd minus the Windows toast. Override PY to use another interpreter.
 set -u
 cd "$(dirname "$0")/.."
@@ -15,6 +15,7 @@ run discover --per-board 40 --limit 900
 run enrich --limit 30 --min-score 60
 run analyze --limit 15 --min-score 75
 run digest --limit 12 --min-fit 60
+run verify
 run site
 if [ "${SKIP_PUBLISH:-0}" != "1" ]; then
   echo "== publish site"
