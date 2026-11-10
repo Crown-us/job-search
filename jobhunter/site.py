@@ -214,7 +214,8 @@ def candidates(min_score: int = 60, max_age_days: int = 30, now: datetime | None
     conn = db.connect()
     rows = [dict(r) for r in conn.execute(
         "SELECT id, source, company, title, url, location, remote, salary, department, description, "
-        "posted_at, first_seen, checked_at FROM jobs WHERE COALESCE(closed_at, '') = ''"
+        "posted_at, first_seen, checked_at, reviewed FROM jobs "
+        "WHERE COALESCE(closed_at, '') = '' AND COALESCE(hidden_reason, '') = ''"
     )]
     conn.close()
 

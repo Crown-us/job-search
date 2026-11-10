@@ -82,9 +82,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "message_id" not in columns:
         conn.execute("ALTER TABLE deliveries ADD COLUMN message_id TEXT")
     columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
-    for column in ("closed_at", "checked_at"):
+    for column in ("closed_at", "checked_at", "hidden_reason"):
         if column not in columns:
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {column} TEXT DEFAULT ''")
+    if "reviewed" not in columns:
+        # 1 = a person cleared this posting, so automatic red flags leave it alone.
+        conn.execute("ALTER TABLE jobs ADD COLUMN reviewed INTEGER DEFAULT 0")
     conn.commit()
 
 

@@ -282,33 +282,93 @@ def cmd_site(args) -> int:
 
 
 def cmd_verify(args) -> int:
-    """Re-open each public posting's page and hide the ones the board has closed."""
+    """Re-open each public posting's page; hide the closed ones and the ones that look fake."""
     from datetime import timedelta, timezone
 
-    from . import liveness, site
+    from . import liveness, site, suspect
     from .model import utcnow
 
     now = datetime.now(timezone.utc)
     stale = (now - timedelta(hours=args.recheck_hours)).isoformat()
-    rows = [row for row, _ in site.candidates(min_score=args.min_score, max_age_days=args.max_age_days, now=now)
-            if args.all or (row.get("checked_at") or "") < stale]
-    console.print(f"[bold]verify[/] cek {len(rows)} lowongan")
-    results = liveness.check_many(rows)
+    pairs = [(row, entry) for row, entry in
+             site.candidates(min_score=args.min_score, max_age_days=args.max_age_days, now=now)
+             if args.all or (row.get("checked_at") or "") < stale]
+    track_of = {row["id"]: entry["track"] for row, entry in pairs}
+    console.print(f"[bold]verify[/] cek {len(pairs)} lowongan")
+    results = liveness.check_many([row for row, _ in pairs])
     conn = db.connect()
     stamp = utcnow()
-    tally = {"open": 0, "closed": 0, "unknown": 0}
-    for row, state, reason in results:
+    tally = {"open": 0, "closed": 0, "unknown": 0, "curiga": 0}
+    for row, state, reason, text in results:
         tally[state] += 1
         if state == "closed":
             conn.execute("UPDATE jobs SET closed_at=?, checked_at=? WHERE id=?", (stamp, stamp, row["id"]))
             console.print(f"  [red]tutup[/] {row['source']:<10} {row['title'][:50]} - {row['company'][:30]} ({reason})")
-        elif state == "open":
-            conn.execute("UPDATE jobs SET checked_at=? WHERE id=?", (stamp, row["id"]))
-        elif args.verbose:
-            console.print(f"  [yellow]?[/] {row['source']:<10} {row['url']} ({reason})")
+            continue
+        if state == "unknown":
+            if args.verbose:
+                console.print(f"  [yellow]?[/] {row['source']:<10} {row['url']} ({reason})")
+            continue
+        if len(text) > len(row.get("description") or ""):
+            row["description"] = text
+            conn.execute("UPDATE jobs SET description=? WHERE id=?", (text, row["id"]))
+        conn.execute("UPDATE jobs SET checked_at=? WHERE id=?", (stamp, row["id"]))
+        why = "" if row.get("reviewed") else suspect.verdict(row, track_of[row["id"]])
+        if why:
+            tally["curiga"] += 1
+            conn.execute("UPDATE jobs SET hidden_reason=? WHERE id=?", (f"auto: {why}", row["id"]))
+            console.print(f"  [magenta]curiga[/] {row['id'][:12]} {row['title'][:40]} - {row['company'][:30]} ({why})")
     conn.commit()
     conn.close()
-    console.print(f"[bold]verify[/] buka {tally['open']}, tutup {tally['closed']}, tidak pasti {tally['unknown']}")
+    console.print(f"[bold]verify[/] buka {tally['open']}, tutup {tally['closed']}, "
+                  f"disembunyikan karena curiga {tally['curiga']}, tidak pasti {tally['unknown']}")
+    return 0
+
+
+def _one_job(conn, job_id: str):
+    rows = conn.execute("SELECT id, title, company FROM jobs WHERE id LIKE ?", (f"{job_id}%",)).fetchall()
+    if len(rows) != 1:
+        console.print(f"[red]{len(rows)} lowongan cocok dengan '{job_id}'[/] - pakai id yang lebih panjang")
+        return None
+    return rows[0]
+
+
+def cmd_block(args) -> int:
+    conn = db.connect()
+    row = _one_job(conn, args.job_id)
+    if row is None:
+        return 1
+    conn.execute("UPDATE jobs SET hidden_reason=? WHERE id=?", (f"manual: {args.reason or 'diblokir'}", row["id"]))
+    conn.commit()
+    console.print(f"[bold]diblokir[/] {row['title']} - {row['company']}. Jalankan `site` lalu publish agar hilang dari papan.")
+    return 0
+
+
+def cmd_unblock(args) -> int:
+    conn = db.connect()
+    row = _one_job(conn, args.job_id)
+    if row is None:
+        return 1
+    conn.execute("UPDATE jobs SET hidden_reason='', reviewed=1 WHERE id=?", (row["id"],))
+    conn.commit()
+    console.print(f"[bold]ditampilkan lagi[/] {row['title']} - {row['company']} (tanda otomatis tidak akan menyembunyikannya lagi)")
+    return 0
+
+
+def cmd_suspects(args) -> int:
+    conn = db.connect()
+    rows = conn.execute(
+        "SELECT id, title, company, url, hidden_reason FROM jobs WHERE COALESCE(hidden_reason, '') != '' "
+        "ORDER BY hidden_reason LIKE 'manual:%', title"
+    ).fetchall()
+    conn.close()
+    table = Table(title=f"{len(rows)} lowongan disembunyikan")
+    for col in ("id", "lowongan", "alasan"):
+        table.add_column(col, overflow="fold")
+    for r in rows:
+        table.add_row(r["id"][:12], f"{r['title']}\n{r['company']}\n[dim]{r['url']}[/]", r["hidden_reason"])
+    console.print(table)
+    console.print("[dim]salah tangkap? `jobhunter unblock <id>`[/]")
     return 0
 
 
@@ -343,7 +403,7 @@ def cmd_discord(args) -> int:
     sql = """
         SELECT j.*, a.fit, a.verdict, a.gaps, a.strengths
         FROM jobs j LEFT JOIN analyses a ON a.job_id = j.id
-        WHERE COALESCE(j.closed_at, '') = ''
+        WHERE COALESCE(j.closed_at, '') = '' AND COALESCE(j.hidden_reason, '') = ''
     """
     params: list = []
     if not args.public:
@@ -646,6 +706,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--all", action="store_true", help="re-check everything regardless of last check")
     p.add_argument("-v", "--verbose", action="store_true", help="list postings that could not be checked")
     p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser("block", help="hide one posting from the public board and Discord")
+    p.add_argument("job_id", help="id or id prefix (see `suspects` or the site's jobs.json)")
+    p.add_argument("--reason", default="", help="why, kept for later review")
+    p.set_defaults(func=cmd_block)
+
+    p = sub.add_parser("unblock", help="show a hidden posting again and stop auto-flagging it")
+    p.add_argument("job_id")
+    p.set_defaults(func=cmd_unblock)
+
+    p = sub.add_parser("suspects", help="list hidden postings and why they were hidden")
+    p.set_defaults(func=cmd_suspects)
 
     p = sub.add_parser("toast", help="pop a Windows notification with today's top picks")
     p.add_argument("--min-fit", type=int, default=75)
