@@ -175,9 +175,11 @@ a { color: inherit; }
   border: 1px solid var(--night-line); border-radius: 999px; min-height: 44px; padding: 0 16px; }
 .theme:hover { border-color: var(--night-ink); }
 .theme:active { transform: translateY(1px); }
-.searchbar { position: sticky; top: 0; z-index: 5; background: var(--night); color: var(--night-ink);
-  border-bottom: 1px solid var(--night-line); }
-.searchbar .in-wrap { padding-top: 10px; padding-bottom: 16px; }
+/* The whole header stays pinned; the sidebar pins right under it (--hdr is set by JS) */
+#top { position: sticky; top: 0; z-index: 5; }
+.searchbar { background: var(--night); color: var(--night-ink); border-bottom: 1px solid var(--night-line); }
+.searchbar .in-wrap { display: flex; align-items: flex-end; gap: 10px; padding-top: 10px; padding-bottom: 16px; }
+#search { flex: 1; min-width: 0; }
 .search { display: block; font-size: .85rem; color: var(--night-muted); }
 .search span { display: block; margin-bottom: 6px; }
 .search .box { position: relative; display: block; }
@@ -190,6 +192,10 @@ a { color: inherit; }
 
 /* Body: filter sidebar + card grid */
 .shell { display: grid; grid-template-columns: 15.5rem minmax(0, 1fr); gap: 32px; padding-top: 28px; padding-bottom: 24px; }
+#aside { position: sticky; top: calc(var(--hdr, 180px) + 20px); align-self: start;
+  max-height: calc(100vh - var(--hdr, 180px) - 36px); overflow-y: auto; overscroll-behavior: contain;
+  padding-right: 6px; scrollbar-width: thin; }
+.done { display: none; }
 .promo { background: var(--night); color: var(--night-ink); border: 1px solid var(--night-line); border-radius: 22px; padding: 20px; margin-bottom: 24px; }
 .promo h2 { font-size: 1.3rem; line-height: 1.2; margin: 0 0 8px; }
 .promo p { font-size: .9rem; color: var(--night-muted); margin: 0 0 16px; }
@@ -212,7 +218,10 @@ legend { font-size: .8rem; font-weight: 600; color: var(--muted); padding: 0; ma
 .total { border: 1px solid var(--line); border-radius: 999px; padding: 2px 12px; font-weight: 600; font-size: .95rem; }
 .sort { margin-left: auto; color: var(--muted); font-size: .85rem; }
 .count { flex-basis: 100%; margin: 0; color: var(--muted); font-size: .9rem; }
-.toggle { display: none; }
+.toggle { display: none; font: 600 .95rem var(--font); color: var(--night-ink); background: var(--night-2);
+  border: 1px solid var(--night-line); border-radius: 14px; min-height: 52px; padding: 0 16px; flex: none; }
+.toggle:hover { border-color: var(--night-muted); }
+.toggle:active { transform: translateY(1px); }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(16.5rem, 1fr)); gap: 18px; }
 .ad { position: relative; display: flex; flex-direction: column; background: var(--surface);
@@ -267,18 +276,31 @@ footer p { margin: 0 0 10px; max-width: 40rem; color: var(--muted); }
 @media (max-width: 860px) {
   .shell { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .promo { display: none; }
-  #side { display: none; margin-bottom: 20px; border: 1px solid var(--line); border-radius: 22px;
-    padding: 16px; background: var(--surface); }
+  #aside { position: static; max-height: none; overflow: visible; padding: 0; }
+  /* Filter opens as a sheet under the pinned header; elevated because it covers the cards */
+  #side { display: none; position: fixed; z-index: 6; top: calc(var(--hdr, 160px) + 8px); left: 16px; right: 16px;
+    max-height: calc(100vh - var(--hdr, 160px) - 24px); overflow-y: auto; overscroll-behavior: contain;
+    border: 1px solid var(--line); border-radius: 22px; padding: 16px; background: var(--surface);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, .28); }
   #side.open { display: block; }
-  .toggle { display: inline-flex; align-items: center; margin-left: auto; }
+  .toggle { display: inline-flex; align-items: center; }
+  .done { display: inline-flex; align-items: center; margin-left: 8px; background: var(--ink); color: var(--surface);
+    border-color: var(--ink); }
   .sort { display: none; }
   .foot { grid-template-columns: 1fr; }
 }
 @media (max-width: 520px) {
   .grid { grid-template-columns: minmax(0, 1fr); }
-  .edition { flex-basis: 100%; order: 3; }
+  .edition { display: none; }
+  .topbar .in-wrap { padding-top: 10px; padding-bottom: 2px; }
+  .theme { min-height: 40px; }
+  .search span:first-child { margin-bottom: 4px; }
+  .searchbar .in-wrap { padding-bottom: 12px; }
 }
-@media (max-height: 520px) { .searchbar { position: static; } }
+@media (max-height: 520px) {
+  #top, #aside { position: static; max-height: none; overflow: visible; }
+  #side { top: 16px; max-height: calc(100vh - 32px); }
+}
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; } .ad:hover { transform: none; }
 }
@@ -309,12 +331,14 @@ JS = """
   var form = document.getElementById('filters'), q = document.getElementById('q'),
       side = document.getElementById('side'), toggle = document.getElementById('toggle'),
       total = document.getElementById('total'), count = document.getElementById('count'),
-      empty = document.getElementById('empty'), bar = document.getElementById('searchbar'),
+      empty = document.getElementById('empty'), bar = document.getElementById('top'),
       ads = Array.prototype.slice.call(document.querySelectorAll('.ad')), all = ads.length;
   if (!all) return;
   form.hidden = false; q.disabled = false; toggle.hidden = false;
   function pad() {
-    root.style.scrollPaddingTop = (getComputedStyle(bar).position === 'sticky' ? bar.offsetHeight + 8 : 0) + 'px';
+    var pinned = getComputedStyle(bar).position === 'sticky';
+    root.style.setProperty('--hdr', (pinned ? bar.offsetHeight : 0) + 'px');
+    root.style.scrollPaddingTop = (pinned ? bar.offsetHeight + 8 : 0) + 'px';
   }
   pad(); addEventListener('resize', pad);
   function checked(name) {
@@ -352,9 +376,15 @@ JS = """
   document.getElementById('search').addEventListener('submit', function (e) { e.preventDefault(); apply(); });
   document.getElementById('reset').addEventListener('click', reset);
   document.getElementById('reset-side').addEventListener('click', reset);
-  toggle.addEventListener('click', function () {
-    var open = side.classList.toggle('open');
+  function setOpen(open, refocus) {
+    side.classList.toggle('open', open);
     toggle.setAttribute('aria-expanded', String(open));
+    if (!open && refocus) toggle.focus();
+  }
+  toggle.addEventListener('click', function () { setOpen(!side.classList.contains('open')); });
+  document.getElementById('done').addEventListener('click', function () { setOpen(false, true); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && side.classList.contains('open')) setOpen(false, true);
   });
   apply();
 })();
@@ -402,7 +432,7 @@ def render(jobs: list[dict], name: str, now: datetime | None = None) -> str:
 <style>{CSS}</style>
 </head>
 <body>
-<header>
+<header id="top">
   <div class="topbar"><div class="in-wrap">
     <p class="brand">{e(name)}</p>
     <p class="edition">Edisi {edition}. Diperbarui tiap pagi.</p>
@@ -417,10 +447,11 @@ def render(jobs: list[dict], name: str, now: datetime | None = None) -> str:
         </span>
       </label>
     </form>
+    <button type="button" class="toggle" id="toggle" aria-expanded="false" aria-controls="side" hidden>Filter</button>
   </div></div>
 </header>
 <div class="in-wrap shell">
-  <aside>
+  <aside id="aside">
     <section class="promo">
       <h2>Awas penipuan</h2>
       <p>Perusahaan yang sah tidak meminta biaya untuk melamar. Ada yang minta transfer? Jangan dibayar.</p>
@@ -433,6 +464,7 @@ def render(jobs: list[dict], name: str, now: datetime | None = None) -> str:
         <fieldset><legend>Lowongan</legend>{_options("flag", flags)}</fieldset>
         <fieldset><legend>Sumber</legend>{_options("src", sources)}</fieldset>
         <button type="button" class="ghost" id="reset-side">Hapus filter</button>
+        <button type="button" class="ghost done" id="done">Selesai</button>
       </form>
     </div>
   </aside>
@@ -441,7 +473,6 @@ def render(jobs: list[dict], name: str, now: datetime | None = None) -> str:
       <h1>Lowongan terbaru</h1>
       <span class="total" id="total">{len(jobs)}</span>
       <span class="sort">Urut: terbaru</span>
-      <button type="button" class="ghost toggle" id="toggle" aria-expanded="false" aria-controls="side" hidden>Filter</button>
       <p class="count" id="count" aria-live="polite">{tally}</p>
     </div>
     <div class="grid">
