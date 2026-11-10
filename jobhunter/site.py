@@ -4,16 +4,16 @@ Only public fields leave the database: title, company, location, salary,
 remote flag, source, dates, track and the original URL. Personal CV fit,
 gaps, letters, statuses and score reasons are never written.
 
-Design notes ("Maniak Kerja", loud tabloid / classifieds, ENERGY 3 / RHYTHM 2 / MOTION 1):
-- palette: newsprint paper + ink, tabloid red for the nameplate and the scam
-  warning (brand + danger), yellow marker reserved for "baru" (headline count and
-  the sticker on fresh ads), because new-since-yesterday is what a daily reader scans for
-- Anton (condensed, all caps) is the tabloid nameplate/headline voice; Libre Franklin
-  is a Franklin Gothic revival, the classic newspaper gothic, for dense ad text
-- halftone dots on the red nameplate and hard offset ink shadows on hover are the
-  print motif; boxed ads in auto-fill columns read as a classifieds page
-- tracks are black section kickers, not per-track colours, to keep the palette at
-  paper/ink/red + one yellow accent
+Design notes ("Maniak Kerja", job-app style after a Dribbble reference the owner picked,
+ENERGY 2 / RHYTHM 1 / MOTION 2):
+- night header with a pinned search strip, filter sidebar, card grid: the reader's one
+  job is to narrow 300+ postings fast, so search and filters stay reachable
+- pastel card tint encodes the track (Developer blue, Marketing peach, ...), not random
+  decoration; one sky-blue accent marks "Baru" and focus
+- Plus Jakarta Sans: geometric and friendly like the reference, made for Jakarta
+- company initial in a circle stands in for logos we do not have
+- cards rise in with a short stagger whenever the result set changes, so a filter
+  change reads as "new results"; disabled under prefers-reduced-motion
 - the full list is server-rendered; JavaScript only filters it, so the page
   works without JS and has no loading or fetch-error state to show
 """
@@ -109,149 +109,179 @@ def select_jobs(min_score: int = 60, max_age_days: int = 30, now: datetime | Non
 def _entry(job: dict) -> str:
     e = html.escape
     where = e(job["location"][:90]) if job["location"] else "Lokasi tidak disebut"
-    kicker = TRACK_LABEL.get(job["track"], job["track"])
-    tags = []
+    track = TRACK_LABEL.get(job["track"], job["track"])
+    tags = [f"<li>{e(track)}</li>"]
     if job["remote"]:
-        tags.append('<span class="tag">Remote</span>')
-    pay = f'<p class="pay">{e(job["salary"])}</p>' if job["salary"] else ""
+        tags.append("<li>Remote</li>")
+    tags.append(f"<li>via {e(job['source'])}</li>")
+    pay = e(job["salary"]) if job["salary"] else "Gaji tidak disebut"
+    pay_cls = "pay" if job["salary"] else "pay none"
     posted = _day(datetime.fromtimestamp(job["posted"], timezone.utc))
     mark = '<span class="new">Baru</span>' if job["new"] else ""
+    initial = e((job["company"].strip(" .")[:1] or "?").upper())
     haystack = e(f"{job['title']} {job['company']} {job['location']}".lower(), quote=True)
+    label = e(f"Lamar {job['title']} di {job['company']}", quote=True)
     return f"""
-    <article class="ad" data-track="{e(job['track'], quote=True)}" data-remote="{int(job['remote'])}"
-             data-text="{haystack}">
-      {mark}
-      <p class="kicker"><span>{e(kicker)}</span>{''.join(tags)}</p>
-      <h2><a href="{e(job['url'], quote=True)}" rel="noopener nofollow">{e(job['title'])}</a></h2>
-      <p class="who">{e(job['company'])}</p>
-      <p class="where">{where}</p>
-      {pay}
-      <p class="src">via {e(job['source'])}, diposting {posted}</p>
+    <article class="ad t-{e(job['track'], quote=True)}" data-track="{e(job['track'], quote=True)}"
+             data-remote="{int(job['remote'])}" data-pay="{int(bool(job['salary']))}"
+             data-new="{int(job['new'])}" data-src="{e(job['source'], quote=True)}" data-text="{haystack}">
+      <div class="tint">
+        <div class="top"><span class="date">{posted}</span>{mark}</div>
+        <p class="co">{e(job['company'])}</p>
+        <div class="head"><h2>{e(job['title'])}</h2><span class="mono" aria-hidden="true">{initial}</span></div>
+        <ul class="tags">{''.join(tags)}</ul>
+      </div>
+      <div class="row">
+        <div><p class="{pay_cls}">{pay}</p><p class="where">{where}</p></div>
+        <a class="apply" href="{e(job['url'], quote=True)}" rel="noopener nofollow" aria-label="{label}">Lamar</a>
+      </div>
     </article>"""
 
 
-FONTS = ("https://fonts.googleapis.com/css2?family=Anton&"
-         "family=Libre+Franklin:wght@400;600;800&display=swap")
+FONTS = "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
 
 CSS = """
 :root {
-  --paper: #f2ebdb; --card: #fbf7ee; --ink: #15120d; --muted: #554d40; --rule: #b9ad97;
-  --red: #c4161c; --red-text: #a8121a; --marker: #ffd43b; --marker-ink: #15120d;
-  --display: "Anton", Impact, "Arial Narrow Bold", sans-serif;
-  --news: "Libre Franklin", "Franklin Gothic Medium", system-ui, sans-serif;
+  --bg: #eef0f4; --surface: #ffffff; --ink: #121316; --muted: #545968; --line: #d9dce4;
+  --night: #111214; --night-2: #1c1d22; --night-line: #34363e; --night-ink: #f4f5f7; --night-muted: #a9aebb;
+  --accent: #8cc8ff; --accent-ink: #0b1a2a;
+  --font: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #16130f; --card: #201c16; --ink: #f1e9d8; --muted: #bdb3a1; --rule: #4d463b;
-    --red-text: #ff7a6e; color-scheme: dark;
+    --bg: #0d0e11; --surface: #17181c; --ink: #eceef2; --muted: #a9aebb; --line: #2c2f36; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --paper: #16130f; --card: #201c16; --ink: #f1e9d8; --muted: #bdb3a1; --rule: #4d463b;
-  --red-text: #ff7a6e; color-scheme: dark;
+  --bg: #0d0e11; --surface: #17181c; --ink: #eceef2; --muted: #a9aebb; --line: #2c2f36; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.5 var(--news); }
-a, button, select, label[for], input[type=checkbox] { cursor: pointer; }
-a { color: inherit; text-underline-offset: 3px; }
-:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
-.wrap { max-width: 74rem; margin: 0 auto; padding: 0 16px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--font); }
+a, button, select, label[for], label:has(input[type=checkbox]), input[type=checkbox] { cursor: pointer; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.in-wrap { max-width: 80rem; margin: 0 auto; padding: 0 16px; }
 
-/* Nameplate: tabloid red band; the halftone dots are the newsprint motif. */
-.nameplate { background-color: var(--red); color: #fff;
-  background-image: radial-gradient(rgba(0,0,0,.22) 1.1px, transparent 1.6px);
-  background-size: 7px 7px; border-bottom: 6px solid var(--ink); }
-.np { display: flex; justify-content: space-between; align-items: center; gap: 12px 20px;
-  flex-wrap: wrap; padding: 18px 16px 14px; }
-.np h1 { font: 400 clamp(3rem, 13vw, 7.5rem)/.9 var(--display); margin: 0; text-transform: uppercase;
-  letter-spacing: .01em; text-shadow: 3px 3px 0 #15120d; }
-.np .motto { font: 800 .95rem/1.3 var(--news); margin: 8px 0 0; }
-.nameplate :focus-visible { outline-color: #fff; }
-.theme { font: 600 .9rem var(--news); color: #fff; background: transparent; border: 2px solid #fff;
-  min-height: 44px; padding: 0 14px; }
-.theme:hover { background: #fff; color: var(--red); }
+/* Header: night bar, the search strip below it stays pinned while scrolling */
+.topbar { background: var(--night); color: var(--night-ink); }
+.topbar .in-wrap { display: flex; align-items: center; justify-content: space-between; gap: 8px 20px;
+  flex-wrap: wrap; padding-top: 16px; padding-bottom: 6px; }
+.brand { font-weight: 700; font-size: 1.25rem; letter-spacing: -0.01em; margin: 0; }
+.edition { color: var(--night-muted); font-size: .85rem; margin: 0; flex: 1; }
+.theme { font: 600 .85rem var(--font); color: var(--night-ink); background: transparent;
+  border: 1px solid var(--night-line); border-radius: 999px; min-height: 44px; padding: 0 16px; }
+.theme:hover { border-color: var(--night-ink); }
 .theme:active { transform: translateY(1px); }
-.dateline { border-bottom: 1px solid var(--ink); font-size: .9rem; font-weight: 600; }
-.dateline .wrap { padding-top: 8px; padding-bottom: 8px; }
+.searchbar { position: sticky; top: 0; z-index: 5; background: var(--night); color: var(--night-ink);
+  border-bottom: 1px solid var(--night-line); }
+.searchbar .in-wrap { padding-top: 10px; padding-bottom: 16px; }
+.search { display: block; font-size: .85rem; color: var(--night-muted); }
+.search span { display: block; margin-bottom: 6px; }
+.search .box { position: relative; display: block; }
+.search svg { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px;
+  color: var(--night-muted); pointer-events: none; }
+.search input { width: 100%; font: 500 1rem var(--font); color: var(--night-ink); background: var(--night-2);
+  border: 1px solid var(--night-line); border-radius: 14px; min-height: 52px; padding: 0 16px 0 48px; }
+.search input::placeholder { color: #8f94a3; }
+.search input:hover { border-color: var(--night-muted); }
 
-/* Lead: the one headline per edition; yellow marker = "baru" everywhere. */
-.lead { padding-top: 28px; padding-bottom: 8px; }
-.headline { font: 400 clamp(2rem, 7vw, 4.2rem)/1.02 var(--display); text-transform: uppercase;
-  margin: 0; max-width: 24ch; }
-mark { background: var(--marker); color: var(--marker-ink); padding: 0 .12em;
-  box-decoration-break: clone; -webkit-box-decoration-break: clone; }
-.deck { font-size: 1.1rem; margin: 14px 0 0; max-width: 40rem; }
+/* Body: filter sidebar + card grid */
+.shell { display: grid; grid-template-columns: 15.5rem minmax(0, 1fr); gap: 32px; padding-top: 28px; padding-bottom: 24px; }
+.promo { background: var(--night); color: var(--night-ink); border: 1px solid var(--night-line); border-radius: 22px; padding: 20px; margin-bottom: 24px; }
+.promo h2 { font-size: 1.3rem; line-height: 1.2; margin: 0 0 8px; }
+.promo p { font-size: .9rem; color: var(--night-muted); margin: 0 0 16px; }
+.pill-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: .9rem; text-decoration: none; }
+.pill-link:hover { background: #b3dbff; }
+.side-h { font-size: 1.15rem; margin: 0 0 12px; }
+fieldset { border: 0; padding: 0; margin: 0 0 18px; min-width: 0; }
+legend { font-size: .8rem; font-weight: 600; color: var(--muted); padding: 0; margin-bottom: 4px; }
+.opt { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: .92rem; }
+.opt input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink); flex: none; }
+.opt small { margin-left: auto; color: var(--muted); font-size: .8rem; }
+.ghost { font: 600 .9rem var(--font); color: var(--ink); background: transparent; border: 1px solid var(--line);
+  border-radius: 999px; min-height: 44px; padding: 0 18px; }
+.ghost:hover { border-color: var(--ink); }
+.ghost:active { transform: translateY(1px); }
 
-/* Sticky filter strip */
-.panel { position: sticky; top: 0; z-index: 3; background: var(--paper);
-  margin-top: 24px; padding-bottom: 10px; border-bottom: 3px solid var(--ink); }
-form.filters { display: grid; grid-template-columns: 2fr 1fr auto; gap: 10px 14px; align-items: end;
-  margin: 0; padding: 14px 0 0; }
-.field { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; font-weight: 600; color: var(--ink); }
-.field input, .field select { font: inherit; font-weight: 400; font-size: 1rem; color: var(--ink);
-  background: var(--card); border: 2px solid var(--ink); border-radius: 0; min-height: 44px; padding: 0 10px; }
-.field input:hover, .field select:hover { background: var(--paper); }
-.check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 600; }
-.check input { width: 20px; height: 20px; accent-color: var(--red); margin: 0; }
-.count { margin: 10px 0 0; font-weight: 600; font-size: .95rem; }
+.res-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.res-head h1 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+.total { border: 1px solid var(--line); border-radius: 999px; padding: 2px 12px; font-weight: 600; font-size: .95rem; }
+.sort { margin-left: auto; color: var(--muted); font-size: .85rem; }
+.count { flex-basis: 100%; margin: 0; color: var(--muted); font-size: .9rem; }
+.toggle { display: none; }
 
-/* Classified boxes in newspaper columns */
-.ads { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 18px;
-  padding: 22px 0 8px; }
-.ad { position: relative; display: flex; flex-direction: column; background: var(--card);
-  border: 2px solid var(--ink); padding: 14px 16px 12px;
-  transition: transform .12s ease, box-shadow .12s ease; }
-.ad:hover, .ad:focus-within { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--ink); }
-.kicker { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
-.kicker span { background: var(--ink); color: var(--paper); font-size: .75rem; font-weight: 800;
-  text-transform: uppercase; letter-spacing: .03em; padding: 2px 7px; }
-.kicker .tag { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); padding: 1px 6px; }
-.ad h2 { font: 800 1.2rem/1.2 var(--news); margin: 0 0 8px; overflow-wrap: anywhere; }
-.ad h2 a { text-decoration: none; }
-.ad h2 a::after { content: ""; position: absolute; inset: 0; }
-.ad h2 a:focus-visible { outline: none; }
-.ad:focus-within { outline: 3px solid var(--red); outline-offset: 2px; }
-.ad:hover h2 a { text-decoration: underline; text-decoration-thickness: 2px; }
-.ad p { margin: 0; overflow-wrap: anywhere; }
-.who { font-weight: 600; }
-.where { color: var(--muted); font-size: .95rem; }
-.pay { color: var(--red-text); font-weight: 800; margin-top: 6px !important; }
-.src { color: var(--muted); font-size: .82rem; margin-top: auto !important; padding-top: 10px; }
-.new { position: absolute; top: -12px; right: 10px; transform: rotate(4deg);
-  background: var(--marker); color: var(--marker-ink); border: 2px solid var(--marker-ink);
-  font: 400 1rem/1 var(--display); text-transform: uppercase; letter-spacing: .04em; padding: 4px 9px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(16.5rem, 1fr)); gap: 18px; }
+.ad { position: relative; display: flex; flex-direction: column; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 22px; padding: 8px;
+  transition: transform .15s ease, border-color .15s ease; }
+.ad:hover { transform: translateY(-2px); border-color: var(--muted); }
+.ad:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+.tint { background: var(--tint); border-radius: 16px; padding: 14px 14px 16px; flex: 1;
+  --tag-line: color-mix(in srgb, var(--ink) 35%, transparent); }
+.t-fullstack { --tint: #dbe8ff; } .t-it_support { --tint: #d4f1e7; } .t-ai_junior { --tint: #e6dcfb; }
+.t-admin_data { --tint: #e9e7e1; } .t-marketing { --tint: #ffe0c9; } .t-video_editor { --tint: #ffdae8; }
+.t-graphic_design { --tint: #fdeeb4; } .t-social_media { --tint: #d6f0cc; }
+:root[data-theme="dark"] .tint { background: color-mix(in srgb, var(--tint) 24%, var(--surface)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .tint { background: color-mix(in srgb, var(--tint) 24%, var(--surface)); }
+}
+.top { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; }
+.date { background: var(--surface); border-radius: 999px; padding: 4px 12px; font-size: .8rem; font-weight: 500; }
+.new { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 4px 10px;
+  font-size: .78rem; font-weight: 700; }
+.co { font-size: .85rem; font-weight: 500; margin: 0 0 2px; overflow-wrap: anywhere; }
+.head { display: flex; align-items: flex-start; gap: 12px; }
+.head h2 { flex: 1; font-size: 1.2rem; line-height: 1.25; font-weight: 600; margin: 0; overflow-wrap: anywhere; }
+.mono { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%;
+  background: var(--ink); color: var(--surface); font-weight: 700; font-size: 1rem; }
+.tags { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 16px 0 0; }
+.tags li { border: 1px solid var(--tag-line); border-radius: 999px; padding: 2px 10px; font-size: .76rem; font-weight: 500; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 8px 6px; }
+.row p { margin: 0; overflow-wrap: anywhere; }
+.pay { font-weight: 700; font-size: .92rem; }
+.pay.none { font-weight: 500; color: var(--muted); }
+.where { color: var(--muted); font-size: .8rem; }
+.apply { flex: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; border-radius: 999px;
+  background: var(--ink); color: var(--surface); font-weight: 600; font-size: .9rem; text-decoration: none; }
+.apply::after { content: ""; position: absolute; inset: 0; border-radius: 22px; }
+.apply:focus-visible { outline: none; }
+.ad:hover .apply { background: color-mix(in srgb, var(--ink) 82%, var(--accent)); }
 
-.empty { padding: 32px 0; }
-.ads > .empty { grid-column: 1 / -1; }
-.empty p { margin: 0 0 12px; font-size: 1.15rem; font-weight: 600; max-width: 40rem; }
-.reset { font: 800 1rem var(--news); color: var(--paper); background: var(--ink); border: 2px solid var(--ink);
-  min-height: 44px; padding: 0 16px; }
-.reset:hover { background: var(--red); border-color: var(--red); color: #fff; }
-.reset:active { transform: translateY(1px); }
+/* Cards rise in, staggered, whenever the filter result changes */
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.ad.in { animation: rise .38s cubic-bezier(.2, .7, .3, 1) both; }
 
-footer { margin: 40px 0 0; padding: 0 0 48px; border-top: 6px solid var(--ink); }
-.foot { display: grid; grid-template-columns: 3fr 2fr; gap: 24px; padding-top: 22px; }
-footer h2 { font: 400 1.6rem/1.1 var(--display); text-transform: uppercase; margin: 0 0 10px; }
-footer p { margin: 0 0 10px; max-width: 40rem; }
-.warn { border: 3px solid var(--red); padding: 14px 16px; align-self: start; }
-.warn h2 { color: var(--red-text); }
-.stamp { color: var(--muted); font-size: .9rem; }
+.empty { grid-column: 1 / -1; padding: 32px 4px; }
+.empty p { margin: 0 0 14px; font-size: 1.05rem; max-width: 36rem; }
 
-@media (max-width: 720px) {
-  form.filters { grid-template-columns: 1fr auto; }
-  .field.wide { grid-column: 1 / -1; }
+footer { border-top: 1px solid var(--line); }
+.foot { display: grid; grid-template-columns: 3fr 2fr; gap: 24px; padding-top: 28px; padding-bottom: 48px; }
+footer h2 { font-size: 1.15rem; margin: 0 0 8px; }
+footer p { margin: 0 0 10px; max-width: 40rem; color: var(--muted); }
+.stamp { font-size: .85rem; }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .promo { display: none; }
+  #side { display: none; margin-bottom: 20px; border: 1px solid var(--line); border-radius: 22px;
+    padding: 16px; background: var(--surface); }
+  #side.open { display: block; }
+  .toggle { display: inline-flex; align-items: center; margin-left: auto; }
+  .sort { display: none; }
   .foot { grid-template-columns: 1fr; }
 }
 @media (max-width: 520px) {
-  form.filters { gap: 8px 12px; padding-top: 10px; }
-  .panel { padding-bottom: 8px; }
-  .lead { padding-top: 20px; }
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .edition { flex-basis: 100%; order: 3; }
 }
-@media (max-height: 520px) { .panel { position: static; } }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } .ad:hover { transform: none; } }
+@media (max-height: 520px) { .searchbar { position: static; } }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; } .ad:hover { transform: none; }
+}
 """
 
 JS = """
@@ -277,56 +307,87 @@ JS = """
   });
 
   var form = document.getElementById('filters'), q = document.getElementById('q'),
-      track = document.getElementById('track'), remote = document.getElementById('remote'),
-      count = document.getElementById('count'), empty = document.getElementById('empty'),
-      ads = Array.prototype.slice.call(document.querySelectorAll('.ad')), total = ads.length;
-  if (!total) return;
-  form.hidden = false;
-  var panel = document.getElementById('panel');
-  function pad() { root.style.scrollPaddingTop = (getComputedStyle(panel).position === 'sticky' ? panel.offsetHeight + 8 : 0) + 'px'; }
-  pad(); addEventListener('resize', pad);
-  function apply() {
-    var words = q.value.toLowerCase().split(/\\s+/).filter(Boolean), shown = 0;
-    ads.forEach(function (ad) {
-      var ok = (!track.value || ad.dataset.track === track.value)
-        && (!remote.checked || ad.dataset.remote === '1')
-        && words.every(function (w) { return ad.dataset.text.indexOf(w) !== -1; });
-      ad.hidden = !ok; if (ok) shown++;
-    });
-    count.textContent = shown === total ? total + ' lowongan' : 'Menampilkan ' + shown + ' dari ' + total + ' lowongan';
-    empty.hidden = shown !== 0;
+      side = document.getElementById('side'), toggle = document.getElementById('toggle'),
+      total = document.getElementById('total'), count = document.getElementById('count'),
+      empty = document.getElementById('empty'), bar = document.getElementById('searchbar'),
+      ads = Array.prototype.slice.call(document.querySelectorAll('.ad')), all = ads.length;
+  if (!all) return;
+  form.hidden = false; q.disabled = false; toggle.hidden = false;
+  function pad() {
+    root.style.scrollPaddingTop = (getComputedStyle(bar).position === 'sticky' ? bar.offsetHeight + 8 : 0) + 'px';
   }
-  form.addEventListener('submit', function (e) { e.preventDefault(); apply(); });
-  [q, track, remote].forEach(function (el) { el.addEventListener('input', apply); el.addEventListener('change', apply); });
-  document.getElementById('reset').addEventListener('click', function () {
-    q.value = ''; track.value = ''; remote.checked = false; apply(); q.focus();
+  pad(); addEventListener('resize', pad);
+  function checked(name) {
+    return Array.prototype.slice.call(form.querySelectorAll('input[name="' + name + '"]:checked'))
+      .map(function (i) { return i.value; });
+  }
+  function apply() {
+    var words = q.value.toLowerCase().split(/\\s+/).filter(Boolean),
+        tracks = checked('track'), srcs = checked('src'), flags = checked('flag'), shown = 0;
+    ads.forEach(function (ad) {
+      var d = ad.dataset;
+      var ok = (!tracks.length || tracks.indexOf(d.track) !== -1)
+        && (!srcs.length || srcs.indexOf(d.src) !== -1)
+        && (flags.indexOf('remote') === -1 || d.remote === '1')
+        && (flags.indexOf('pay') === -1 || d.pay === '1')
+        && (flags.indexOf('new') === -1 || d.new === '1')
+        && words.every(function (w) { return d.text.indexOf(w) !== -1; });
+      ad.hidden = !ok;
+      ad.classList.remove('in');
+      if (ok) {
+        if (shown < 12) { void ad.offsetWidth; ad.style.animationDelay = (shown * 45) + 'ms'; ad.classList.add('in'); }
+        shown++;
+      }
+    });
+    total.textContent = shown;
+    count.textContent = shown === all ? all + ' lowongan, urut dari yang terbaru'
+      : 'Menampilkan ' + shown + ' dari ' + all + ' lowongan';
+    empty.hidden = shown !== 0;
+    var active = tracks.length + srcs.length + flags.length;
+    toggle.textContent = active ? 'Filter (' + active + ')' : 'Filter';
+  }
+  function reset() { form.reset(); q.value = ''; apply(); q.focus(); }
+  form.addEventListener('change', apply);
+  q.addEventListener('input', apply);
+  document.getElementById('search').addEventListener('submit', function (e) { e.preventDefault(); apply(); });
+  document.getElementById('reset').addEventListener('click', reset);
+  document.getElementById('reset-side').addEventListener('click', reset);
+  toggle.addEventListener('click', function () {
+    var open = side.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', String(open));
   });
+  apply();
 })();
 """
+
+
+def _options(name: str, items: list[tuple[str, str, int]]) -> str:
+    e = html.escape
+    return "".join(
+        f'<label class="opt"><input type="checkbox" name="{name}" value="{e(v, quote=True)}"> {e(text)}'
+        f'<small>{n}</small></label>' for v, text, n in items)
 
 
 def render(jobs: list[dict], name: str, now: datetime | None = None) -> str:
     now = (now or datetime.now(timezone.utc)).astimezone(WIB)
     e = html.escape
     edition = f"{DAYS[now.weekday()]}, {now.day} {MONTHS[now.month - 1]} {now.year}"
-    present = [t for t in TRACK_LABEL if any(j["track"] == t for j in jobs)]
-    options = "".join(f'<option value="{t}">{e(TRACK_LABEL[t])}</option>' for t in present)
+    tracks = [(t, TRACK_LABEL[t], sum(1 for j in jobs if j["track"] == t)) for t in TRACK_LABEL]
+    tracks = [t for t in tracks if t[2]]
+    sources = sorted({j["source"] for j in jobs})
+    sources = [(s, s, sum(1 for j in jobs if j["source"] == s)) for s in sources]
     fresh = sum(1 for j in jobs if j["new"])
+    flags = [("remote", "Hanya remote", sum(1 for j in jobs if j["remote"])),
+             ("pay", "Ada info gaji", sum(1 for j in jobs if j["salary"])),
+             ("new", "Baru, 2 hari terakhir", fresh)]
     if jobs:
-        tally = f"{len(jobs)} lowongan"
-        tally += f", {fresh} diposting dalam 2 hari terakhir" if fresh else ""
+        tally = f"{len(jobs)} lowongan, urut dari yang terbaru"
         body = "".join(_entry(j) for j in jobs)
     else:
         tally = "Belum ada lowongan"
         body = """
     <div class="empty"><p>Edisi ini belum memuat lowongan. Data diperbarui setiap pagi;
     kalau halaman ini masih kosong besok, pengambilan data sedang bermasalah.</p></div>"""
-
-    if jobs:
-        headline = (f"<mark>{fresh} lowongan baru</mark> dalam 2 hari terakhir" if fresh
-                    else f"{len(jobs)} lowongan masih dibuka")
-    else:
-        headline = "Edisi ini masih kosong"
 
     return f"""<!doctype html>
 <html lang="id">
@@ -341,50 +402,66 @@ def render(jobs: list[dict], name: str, now: datetime | None = None) -> str:
 <style>{CSS}</style>
 </head>
 <body>
-<header class="mast">
-  <div class="nameplate"><div class="wrap np">
-    <div>
-      <h1>{e(name)}</h1>
-      <p class="motto">Loker harian. Yang ngiklan wajib sebut nama perusahaan.</p>
-    </div>
+<header>
+  <div class="topbar"><div class="in-wrap">
+    <p class="brand">{e(name)}</p>
+    <p class="edition">Edisi {edition}. Diperbarui tiap pagi.</p>
     <button type="button" class="theme" id="theme" aria-pressed="false" hidden>Mode gelap</button>
   </div></div>
-  <div class="dateline"><div class="wrap">Edisi {edition} · Terbit tiap pagi</div></div>
-  <div class="wrap lead">
-    <p class="headline">{headline}</p>
-    <p class="deck">Dikumpulkan dari JobStreet, Kalibrr, dan halaman karier perusahaan. Iklan tanpa nama
-    perusahaan dibuang, jadi setiap lowongan di sini jelas siapa yang buka. Klik judulnya untuk melamar
-    di halaman aslinya.</p>
-  </div>
+  <div class="searchbar" id="searchbar"><div class="in-wrap">
+    <form id="search" role="search">
+      <label class="search" for="q"><span>Cari judul, perusahaan, atau kota</span>
+        <span class="box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" type="search" autocomplete="off" placeholder="contoh: laravel surabaya" disabled>
+        </span>
+      </label>
+    </form>
+  </div></div>
 </header>
-<main class="wrap">
-  <div class="panel" id="panel">
-  <form class="filters" id="filters" role="search" hidden>
-    <label class="field wide" for="q">Cari judul, perusahaan, atau kota
-      <input id="q" type="search" autocomplete="off" placeholder="contoh: laravel surabaya">
-    </label>
-    <label class="field" for="track">Bidang
-      <select id="track"><option value="">Semua bidang</option>{options}</select>
-    </label>
-    <label class="check" for="remote"><input id="remote" type="checkbox"> Hanya remote</label>
-  </form>
-  <p class="count" id="count" aria-live="polite">{tally}</p>
-  </div>
-  <div class="empty" id="empty" hidden>
-    <p>Tidak ada lowongan yang cocok dengan filter ini. Coba kata kunci yang lebih pendek atau pilih semua bidang.</p>
-    <button type="button" class="reset" id="reset">Hapus semua filter</button>
-  </div>
-  <div class="ads">{body}</div>
-</main>
-<footer><div class="wrap foot">
+<div class="in-wrap shell">
+  <aside>
+    <section class="promo">
+      <h2>Awas penipuan</h2>
+      <p>Perusahaan yang sah tidak meminta biaya untuk melamar. Ada yang minta transfer? Jangan dibayar.</p>
+      <a class="pill-link" href="#cara-kerja">Cara kerja papan ini</a>
+    </section>
+    <div id="side">
+      <form id="filters" hidden>
+        <h2 class="side-h">Filter</h2>
+        <fieldset><legend>Bidang</legend>{_options("track", tracks)}</fieldset>
+        <fieldset><legend>Lowongan</legend>{_options("flag", flags)}</fieldset>
+        <fieldset><legend>Sumber</legend>{_options("src", sources)}</fieldset>
+        <button type="button" class="ghost" id="reset-side">Hapus filter</button>
+      </form>
+    </div>
+  </aside>
+  <main>
+    <div class="res-head">
+      <h1>Lowongan terbaru</h1>
+      <span class="total" id="total">{len(jobs)}</span>
+      <span class="sort">Urut: terbaru</span>
+      <button type="button" class="ghost toggle" id="toggle" aria-expanded="false" aria-controls="side" hidden>Filter</button>
+      <p class="count" id="count" aria-live="polite">{tally}</p>
+    </div>
+    <div class="grid">
+      <div class="empty" id="empty" hidden>
+        <p>Tidak ada lowongan yang cocok. Coba kata kunci yang lebih pendek atau kurangi filter.</p>
+        <button type="button" class="ghost" id="reset">Hapus semua filter</button>
+      </div>
+      {body}
+    </div>
+  </main>
+</div>
+<footer id="cara-kerja"><div class="in-wrap foot">
   <section>
     <h2>Cara kerja papan ini</h2>
     <p>Setiap pagi skrip menarik lowongan dari JobStreet, Kalibrr, dan halaman karier perusahaan, lalu
     membuang duplikat, posting lebih dari 30 hari, dan iklan yang tidak menyebut nama perusahaan
-    (misalnya "Private Advertiser"). Judul lowongan membawa kamu ke halaman aslinya; lamar di sana.</p>
+    (misalnya "Private Advertiser"). Tombol Lamar membawa kamu ke halaman aslinya; lamar di sana.</p>
     <p class="stamp">Terakhir diperbarui {now:%d-%m-%Y %H:%M} WIB.</p>
   </section>
-  <section class="warn">
+  <section>
     <h2>Awas penipuan</h2>
     <p>Perusahaan yang sah tidak meminta biaya untuk melamar. Kalau ada yang meminta transfer
     untuk "biaya administrasi", "pelatihan", atau "seragam", jangan dibayar.</p>
