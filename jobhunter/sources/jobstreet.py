@@ -24,17 +24,17 @@ def _is_remote(item: dict, location: str) -> bool:
     return "remote" in blob
 
 
-def fetch(keyword: str, page: int = 1, full: bool = False) -> list[Job]:
-    resp = SESSION.get(
-        ENDPOINT,
-        params={
-            "siteKey": "ID-Main",
-            "sourcesystem": "houston",
-            "keywords": keyword,
-            "page": page,
-        },
-        timeout=30,
-    )
+def fetch(keyword: str, page: int = 1, full: bool = False, where: str = "") -> list[Job]:
+    """`where` narrows the search to a city and its surroundings ("Kediri")."""
+    params = {
+        "siteKey": "ID-Main",
+        "sourcesystem": "houston",
+        "keywords": keyword,
+        "page": page,
+    }
+    if where:
+        params["where"] = where
+    resp = SESSION.get(ENDPOINT, params=params, timeout=30)
     resp.raise_for_status()
     payload = resp.json()
 

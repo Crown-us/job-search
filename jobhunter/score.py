@@ -15,6 +15,7 @@ from . import config, db
 ID_HINTS = (
     "indonesia", "jakarta", "malang", "surabaya", "bandung", "yogyakarta",
     "jogja", "bali", "denpasar", "semarang", "kediri", "sleman",
+    "batu", "east java", "jawa timur",
 )
 ENTRY_HINTS = (
     "junior", "intern", "internship", "associate", "entry level",

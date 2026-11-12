@@ -126,22 +126,28 @@ def run_discover(
             spec = searches.get(name) or {}
             keywords = spec.get("keywords") or []
             pages = int(spec.get("pages") or 1)
-            calls = [(kw, page) for kw in keywords for page in range(1, pages + 1)]
+            calls = [(kw, page, "") for kw in keywords for page in range(1, pages + 1)]
+            # Pencarian lokal: kata kunci yang sama, dibatasi ke kota di `where`.
+            local = spec.get("where_keywords") or keywords
+            calls += [(kw, 1, where) for where in (spec.get("where") or []) for kw in local]
         elif name in BOARD_SOURCES:
-            calls = [(token, 0) for token in (cfg.get(name) or [])]
+            calls = [(token, 0, "") for token in (cfg.get(name) or [])]
         elif name in FEED_SOURCES:
-            calls = [("", 0)]
+            calls = [("", 0, "")]
         else:
             calls = []
 
-        for token, page in calls:
+        for token, page, where in calls:
             try:
-                if name in QUERY_SOURCES:
+                if where:
+                    batch = adapter(token, page=page, full=full, where=where)
+                elif name in QUERY_SOURCES:
                     batch = adapter(token, page=page, full=full)
                 else:
                     batch = adapter(token, full=full)
             except Exception as exc:  # one dead board must not kill the run
-                errors.append(f"{name}:{token or '-'} p{page}: {type(exc).__name__}: {exc}")
+                label = f"{token or '-'}@{where}" if where else (token or "-")
+                errors.append(f"{name}:{label} p{page}: {type(exc).__name__}: {exc}")
                 continue
             if per_board_limit:
                 batch = batch[:per_board_limit]

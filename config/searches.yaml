@@ -20,6 +20,13 @@ jobstreet:
     - desain grafis
     - content creator
   pages: 2
+  # Pencarian lokal: tiap kata kunci di atas diulang per kota (1 halaman), karena
+  # pencarian nasional hampir tidak pernah memunculkan kota kecil. JobStreet ikut
+  # mengembalikan daerah sekitarnya (Nganjuk, Blitar, Pasuruan, ...).
+  where:
+    - Kediri
+    - Malang
+    - Batu
 
 # Kalibrr searches on `text` (not q/search/q). Without it the endpoint returns
 # one company's feed, which is useless.

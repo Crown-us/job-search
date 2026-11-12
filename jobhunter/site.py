@@ -124,7 +124,9 @@ CITIES = [
     ("yogyakarta", "Yogyakarta", ("yogyakarta", "jogja", "bantul", "sleman")),
     ("bali", "Bali", ("bali", "denpasar", "badung", "kuta", "gianyar", "seminyak", "ubud")),
     ("batam", "Batam", ("batam",)),
-    ("malang", "Malang", ("malang",)),
+    # "batu" polos akan ikut menangkap Batu Ampar/Batu Ceper, jadi harus berbentuk kota.
+    ("malang", "Malang", ("malang", "kota batu", "batu, east java", "batu, jawa timur")),
+    ("kediri", "Kediri", ("kediri", "nganjuk", "blitar", "tulungagung", "jombang")),
     ("medan", "Medan", ("medan",)),
     ("makassar", "Makassar", ("makassar",)),
     ("solo", "Solo", ("surakarta", "solo,")),
@@ -140,7 +142,8 @@ REGION_ID = {"yogyakarta special region": "Yogyakarta", "west java": "Jawa Barat
              "central java": "Jawa Tengah", "riau islands": "Kepulauan Riau", "banten": "Banten"}
 ABROAD = ("united states", "canada", "united kingdom", "poland", "mexico", "germany", "apac", "emea", "latam",
           "europe", "usa", "uk", "philippines", "singapore", "malaysia", "india")
-STANDALONE = {"sidoarjo", "gresik", "surakarta", "cimahi", "sleman", "bantul"}
+STANDALONE = {"sidoarjo", "gresik", "surakarta", "cimahi", "sleman", "bantul",
+              "batu", "kota batu", "nganjuk", "blitar", "tulungagung", "jombang"}
 GLOBAL = ("remote", "anywhere", "worldwide", "any state")
 CITY_ORDER = [c[0] for c in CITIES] + ["remote", "abroad", "other"]
 CITY_LABEL = {**{c[0]: c[1] for c in CITIES}, "remote": "Remote", "abroad": "Luar Indonesia",
