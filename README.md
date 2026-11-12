@@ -418,3 +418,33 @@ systemctl --user enable --now jobhunter-daily.timer   # tiap 07:00
 
 Interpreter default `~/.venvs/jobhunter/bin/python` (venv di luar partisi NTFS);
 ganti lewat variabel `PY`.
+
+### Jalan harian di Windows
+
+Timer systemd hanya jalan saat PC di-boot ke Linux. Untuk hari-hari di Windows,
+`scripts/daily-windows.ps1` menjalankan `scripts/daily.sh` yang sama lewat Git Bash,
+jadi langkahnya identik (verify, site, publish, Discord, sync).
+
+```powershell
+py -3.12 -m venv $env:USERPROFILE\.venvs\jobhunter
+& $env:USERPROFILE\.venvs\jobhunter\Scripts\python.exe -m pip install -r requirements.txt
+
+$action  = New-ScheduledTaskAction -Execute powershell.exe -WorkingDirectory 'D:\Job Hunter' `
+  -Argument '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "D:\Job Hunter\scripts\daily-windows.ps1"'
+$trigger = New-ScheduledTaskTrigger -Daily -At 07:00
+$set     = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAvailable
+Register-ScheduledTask -TaskName 'JobHunter Daily' -Action $action -Trigger $trigger -Settings $set
+```
+
+- Log: `data\logs\daily-YYYY-MM-DD.log`.
+- Kalau digest hari itu sudah ada (Linux sudah jalan duluan), run dilewati.
+  Paksa dengan `scripts\daily-windows.ps1 -Force`.
+- Tugasnya hanya jalan saat user sedang login; kalau PC mati jam 07:00, ia jalan
+  begitu login berikutnya dan ada internet.
+
+### Pencarian lokal (Kediri, Malang, Batu)
+
+`config/searches.yaml` -> `jobstreet.where` berisi daftar kota. Tiap kata kunci
+diulang sekali per kota, karena pencarian nasional hampir tidak pernah memunculkan
+kota kecil. Tambah kota baru cukup di daftar itu; kalau labelnya belum dikenali,
+tambahkan juga ke `location_allow` di `config/filters.yaml`.
