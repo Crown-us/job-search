@@ -60,7 +60,74 @@ TECH_VOCAB = {
 }
 
 S1_RE = re.compile(r"\b(s1|sarjana|bachelor'?s?|bachelor)\b", re.I)
-D3_RE = re.compile(r"\b(d3|diploma|associate degree)\b", re.I)
+D3_RE = re.compile(r"\b(d3|d-3|d\.3|diploma|associate degree)\b", re.I)
+_NOT_D3_RE = re.compile(r"high[- ]school diploma|diploma (?:sma|smk)|\bd3\.?js\b", re.I)
+# Kata yang menandai S1 itu preferensi, bukan syarat mutlak.
+SOFT_RE = re.compile(
+    r"diutamakan|lebih disukai|disukai|nilai (?:plus|tambah|lebih)|tidak wajib|"
+    r"preferred|preferably|preferable|nice to have|(?:a|is a|as a) (?:plus|bonus)|"
+    r"not (?:required|mandatory)|optional",
+    re.I,
+)
+# Pengalaman diterima sebagai pengganti gelar: selalu melunakkan S1 di kalimat itu.
+ALT_RE = re.compile(
+    r"or equivalent (?:\w+ )?experience|atau pengalaman (?:kerja )?(?:yang )?setara", re.I
+)
+# "D3" di kalimat begini adalah library D3.js, bukan ijazah.
+_D3_LIBRARY_RE = re.compile(r"d3\.?js|visuali[sz]|chart|librar|svg|canvas|plotly", re.I)
+_SEGMENT_RE = re.compile(r"[\n.;•]+")
+# Setelah penanda, kalimat harus selesai; kalau lanjut ("diutamakan berpengalaman
+# Laravel") berarti yang diutamakan hal lain, bukan gelarnya.
+_SOFT_TAIL_RE = re.compile(r"\s*(?:[),:]|$|but\b|namun\b|tapi\b|tetapi\b)", re.I)
+
+GAP_S1 = "minta S1/sarjana, CV lo D3"
+GAP_S1_SOFT = "S1 diutamakan (bukan wajib), CV lo D3"
+
+
+def _s1_is_soft(segment: str, s1: re.Match[str]) -> bool:
+    if ALT_RE.search(segment, s1.end()):
+        return True
+    for soft in SOFT_RE.finditer(segment):
+        if soft.end() <= s1.start():
+            between = segment[soft.end():s1.start()]
+            if len(between) <= 40 and "," not in between:
+                return True
+        elif soft.start() >= s1.end():
+            between = segment[s1.end():soft.start()]
+            # Koma atau isi kurung di antaranya berarti yang diutamakan hal lain
+            # ("S1, jurusan marketing preferred", "S1 (Sastra Cina preferred)").
+            aside = between[between.rfind("(") + 1:].strip() if "(" in between else ""
+            if (len(between) <= 60 and "," not in between and not aside
+                    and _SOFT_TAIL_RE.match(segment, soft.end())):
+                return True
+    return False
+
+
+def _mentions_d3(text: str) -> bool:
+    for segment in _SEGMENT_RE.split(text):
+        for hit in D3_RE.finditer(segment):
+            if hit.group(1).lower() != "d3" or not _D3_LIBRARY_RE.search(segment):
+                return True
+    return False
+
+
+def degree_requirement(jd: str) -> str:
+    """Seberapa keras JD meminta gelar: 'd3_ok', 'required', 'preferred', atau ''.
+
+    D3 yang disebut di mana pun ("D3/S1", "minimal D3") menang: lowongan itu
+    terbuka untuk D3. Tanpa itu, S1 dianggap wajib kecuali setiap penyebutannya
+    diberi penanda preferensi.
+    """
+    text = _NOT_D3_RE.sub(" ", jd)
+    if _mentions_d3(text):
+        return "d3_ok"
+    found = False
+    for segment in _SEGMENT_RE.split(text):
+        for s1 in S1_RE.finditer(segment):
+            found = True
+            if not _s1_is_soft(segment, s1):
+                return "required"
+    return "preferred" if found else ""
 FRESH_RE = re.compile(r"fresh graduate|freshgrad|lulusan baru|open to fresh|new grad", re.I)
 YEARS_RE = re.compile(
     r"(?:min(?:imum|imal)?|at least|paling sedikit|min\.)\s*(\d+)\s*\+?\s*(?:year|tahun|thn)", re.I
@@ -120,9 +187,12 @@ def heuristic_analysis(job: dict, profile: dict) -> dict:
     months = int(profile.get("pengalaman_total_bulan") or 0)
     years_have = months / 12
 
-    if S1_RE.search(jd):
-        gaps.append("minta S1/sarjana, CV lo D3")
-    elif D3_RE.search(jd):
+    degree = degree_requirement(jd)
+    if degree == "required":
+        gaps.append(GAP_S1)
+    elif degree == "preferred":
+        gaps.append(GAP_S1_SOFT)
+    elif degree == "d3_ok":
         strengths.append("D3 diterima/disebut eksplisit")
 
     if FRESH_RE.search(jd):
@@ -153,7 +223,8 @@ def heuristic_analysis(job: dict, profile: dict) -> dict:
     tech_score = 100 * overlap if jd_tech else 55
     base = job.get("score") or 50
     fit = round(0.55 * base + 0.45 * tech_score)
-    fit -= 10 * sum(1 for g in gaps if g.startswith("minta S1"))
+    fit -= 10 * gaps.count(GAP_S1)
+    fit -= 3 * gaps.count(GAP_S1_SOFT)
     fit -= 6 * sum(1 for g in gaps if g.startswith("minta min."))
     fit = max(0, min(100, fit))
 
@@ -187,6 +258,7 @@ Nilai kecocokan 0-100 dan kembalikan HANYA JSON valid dengan bentuk:
 Aturan:
 - Bandingkan requirement di JD dengan fakta di profil. Jangan mengarang pengalaman.
 - Kalau JD minta S1 dan kandidat D3, itu gap, tapi sebut kalau fresh graduate dipersilakan.
+- Bedakan S1 wajib dari S1 "diutamakan/preferred": yang kedua gap kecil. "D3/S1" atau "minimal D3" bukan gap.
 - Kalau JD minta pengalaman bertahun-tahun dan kandidat cuma magang, itu gap besar.
 - gaps maksimal 5, strengths maksimal 5, bahasa Indonesia, spesifik (sebut teknologi/angka).
 """
